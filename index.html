@@ -94,6 +94,67 @@
             </label>
           </div>
 
+          <!-- More filters collapsible -->
+          <div class="more-filters">
+            <button class="more-filters-toggle" @click="moreFiltersOpen = !moreFiltersOpen">
+              <span>More filters</span>
+              <span v-if="moreFilterCount" class="more-filter-count">{{ moreFilterCount }}</span>
+              <span class="more-filters-arrow" :class="{open: moreFiltersOpen}">▾</span>
+            </button>
+
+            <div v-show="moreFiltersOpen" class="more-filters-body">
+
+              <div class="filter-section">
+                <div class="filter-label">Experience level</div>
+                <div class="option-chips">
+                  <button v-for="exp in allExps" :key="exp"
+                    @click="toggleExp(exp)"
+                    :class="['option-chip', {active: selectedExps.has(exp)}]">
+                    {{ EXP_LABELS[exp] || exp }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="filter-section">
+                <div class="filter-label">Age requirement</div>
+                <div class="option-chips">
+                  <button v-for="age in allAges" :key="age"
+                    @click="toggleAge(age)"
+                    :class="['option-chip', {active: selectedAges.has(age)}]">
+                    {{ AGE_LABELS[age] || age }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="filter-section">
+                <div class="filter-label">Max duration: <strong>{{ maxDuration >= 10 ? '10h+' : maxDuration + 'h' }}</strong></div>
+                <input type="range" v-model.number="maxDuration" min="0.5" max="10" step="0.5" class="range-slider">
+                <div class="range-labels"><span>30 min</span><span>10h+</span></div>
+              </div>
+
+              <div class="filter-section">
+                <div class="filter-label">Venue</div>
+                <div class="option-chips">
+                  <button v-for="v in allVenues" :key="v"
+                    @click="toggleVenue(v)"
+                    :class="['option-chip', {active: selectedVenues.has(v)}]">
+                    {{ v }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="filter-section filter-toggles">
+                <label class="check-label">
+                  <input type="checkbox" v-model="noMaterials"> No materials required
+                </label>
+                <label class="check-label">
+                  <input type="checkbox" v-model="noTournaments"> Exclude tournaments
+                </label>
+              </div>
+
+            </div>
+          </div>
+
           <div class="filter-footer">
             <span class="result-count"><strong>{{ filteredEvents.length.toLocaleString() }}</strong> events</span>
             <button v-if="activeFilterCount" @click="clearFilters" class="clear-btn">Clear all</button>

@@ -10,25 +10,27 @@ const TYPE_COLORS = {
 }
 
 const TYPE_LABELS = {
-  BGM: 'Board Game',
-  RPG: 'RPG',
-  CGM: 'Card Game',
-  TCG: 'Trading Card',
-  ESC: 'Escape Room',
-  NMN: 'Miniatures',
-  TDA: 'True Dungeon',
-  ZED: 'Other',
-  WKS: 'Workshop',
-  MHE: 'Mini Hobby',
-  EGM: 'Video Game',
-  SEM: 'Seminar',
-  SPA: 'Activity',
-  HMN: 'Hist. Minis',
-  KID: 'Kids',
-  LRP: 'LARP',
-  ENT: 'Entertainment',
-  FLM: 'Film',
+  BGM: 'Board Game',   RPG: 'RPG',          CGM: 'Card Game',
+  TCG: 'Trading Card', ESC: 'Escape Room',  NMN: 'Miniatures',
+  TDA: 'True Dungeon', ZED: 'Other',        WKS: 'Workshop',
+  MHE: 'Mini Hobby',  EGM: 'Video Game',   SEM: 'Seminar',
+  SPA: 'Activity',    HMN: 'Hist. Minis',  KID: 'Kids',
+  LRP: 'LARP',        ENT: 'Entertainment', FLM: 'Film',
   TRD: 'Trade Day',
+}
+
+const EXP_LABELS = {
+  "None (You've never played before - rules will be taught)": 'Beginner',
+  "Some (You've played it a bit and understand the basics)":  'Some experience',
+  'Expert (You play it regularly and know all the rules)':    'Expert',
+}
+
+const AGE_LABELS = {
+  'Everyone (6+)':             'Everyone (6+)',
+  'Teen (13+)':                'Teen (13+)',
+  'Mature (18+)':              'Mature (18+)',
+  '21+':                       '21+',
+  'kids only (12 and under)':  'Kids (12 & under)',
 }
 
 const DAY_LABELS = {
@@ -45,6 +47,14 @@ const DAY_SHORT = {
   '2026-08-02': 'Sun',
 }
 
+// Normalize minor location typos in the source data
+const normLoc = loc => {
+  const l = (loc || '').trim()
+  if (l.toLowerCase() === 'hilton') return 'Hilton'
+  if (l.toLowerCase() === 'jw')     return 'JW'
+  return l
+}
+
 const { createClient } = supabase
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY)
 
@@ -52,19 +62,27 @@ const { createApp, ref, computed, watch, onMounted } = Vue
 
 createApp({
   setup() {
-    const loading = ref(true)
-    const events  = ref([])
-    const view    = ref('browse')
+    const loading     = ref(true)
+    const events      = ref([])
+    const view        = ref('browse')
     const filtersOpen = ref(false)
 
     // ── Filters ──────────────────────────────────────────
-    const search        = ref('')
-    const searchActive  = ref('')
-    const filterDay     = ref('all')
-    const selectedTypes = ref(new Set())
-    const maxCost       = ref(200)
-    const openOnly      = ref(false)
-    const showPicked    = ref(false)
+    const search           = ref('')
+    const searchActive     = ref('')
+    const filterDay        = ref('all')
+    const selectedTypes    = ref(new Set())
+    const maxCost          = ref(200)
+    const openOnly         = ref(false)
+    const showPicked       = ref(false)
+    // More filters
+    const moreFiltersOpen  = ref(false)
+    const selectedAges     = ref(new Set())
+    const selectedExps     = ref(new Set())
+    const maxDuration      = ref(10)
+    const selectedVenues   = ref(new Set())
+    const noMaterials      = ref(false)
+    const noTournaments    = ref(false)
 
     let debounceTimer
     watch(search, v => {
@@ -73,43 +91,72 @@ createApp({
     })
 
     const days = [
-      { value: 'all',        label: 'All'  },
-      { value: '2026-07-30', label: 'Thu'  },
-      { value: '2026-07-31', label: 'Fri'  },
-      { value: '2026-08-01', label: 'Sat'  },
-      { value: '2026-08-02', label: 'Sun'  },
+      { value: 'all',        label: 'All' },
+      { value: '2026-07-30', label: 'Thu' },
+      { value: '2026-07-31', label: 'Fri' },
+      { value: '2026-08-01', label: 'Sat' },
+      { value: '2026-08-02', label: 'Sun' },
     ]
 
-    const toggleType = code => {
-      const s = new Set(selectedTypes.value)
-      s.has(code) ? s.delete(code) : s.add(code)
-      selectedTypes.value = s
+    const toggleSet = (refVal, key) => {
+      const s = new Set(refVal.value)
+      s.has(key) ? s.delete(key) : s.add(key)
+      refVal.value = s
     }
 
+    const toggleType  = code => toggleSet(selectedTypes,  code)
+    const toggleAge   = age  => toggleSet(selectedAges,   age)
+    const toggleExp   = exp  => toggleSet(selectedExps,   exp)
+    const toggleVenue = v    => toggleSet(selectedVenues, v)
+
     const clearFilters = () => {
-      search.value = ''
-      searchActive.value = ''
-      filterDay.value = 'all'
-      selectedTypes.value = new Set()
-      maxCost.value = 200
-      openOnly.value = false
-      showPicked.value = false
+      search.value         = ''
+      searchActive.value   = ''
+      filterDay.value      = 'all'
+      selectedTypes.value  = new Set()
+      maxCost.value        = 200
+      openOnly.value       = false
+      showPicked.value     = false
+      selectedAges.value   = new Set()
+      selectedExps.value   = new Set()
+      maxDuration.value    = 10
+      selectedVenues.value = new Set()
+      noMaterials.value    = false
+      noTournaments.value  = false
     }
 
     const activeFilterCount = computed(() => {
       let n = 0
-      if (searchActive.value) n++
+      if (searchActive.value)       n++
       if (filterDay.value !== 'all') n++
-      if (selectedTypes.value.size) n += selectedTypes.value.size
-      if (maxCost.value < 200) n++
-      if (openOnly.value) n++
-      if (showPicked.value) n++
+      n += selectedTypes.value.size
+      if (maxCost.value < 200)       n++
+      if (openOnly.value)            n++
+      if (showPicked.value)          n++
+      n += selectedAges.value.size
+      n += selectedExps.value.size
+      if (maxDuration.value < 10)    n++
+      n += selectedVenues.value.size
+      if (noMaterials.value)         n++
+      if (noTournaments.value)       n++
       return n
     })
 
-    // ── Event type summary (counts based on all filters except type) ──
-    const filteredExcludingType = computed(() => {
-      let r = events.value
+    const moreFilterCount = computed(() => {
+      let n = 0
+      n += selectedAges.value.size
+      n += selectedExps.value.size
+      if (maxDuration.value < 10)    n++
+      n += selectedVenues.value.size
+      if (noMaterials.value)         n++
+      if (noTournaments.value)       n++
+      return n
+    })
+
+    // ── Base filter (everything except event type) ────────
+    // Used both for type chip counts and as the base for filteredEvents.
+    const applyBaseFilters = arr => {
+      let r = arr
       if (searchActive.value) {
         const q = searchActive.value.toLowerCase()
         r = r.filter(e =>
@@ -127,9 +174,31 @@ createApp({
         r = r.filter(e => e.tix > 0)
       if (showPicked.value)
         r = r.filter(e => myPicks.value.has(e.id))
+      if (selectedAges.value.size)
+        r = r.filter(e => selectedAges.value.has(e.age))
+      if (selectedExps.value.size)
+        r = r.filter(e => selectedExps.value.has(e.exp))
+      if (maxDuration.value < 10)
+        r = r.filter(e => e.dur <= maxDuration.value)
+      if (selectedVenues.value.size)
+        r = r.filter(e => selectedVenues.value.has(normLoc(e.loc)))
+      if (noMaterials.value)
+        r = r.filter(e => !e.mat)
+      if (noTournaments.value)
+        r = r.filter(e => !e.tour)
+      return r
+    }
+
+    const filteredExcludingType = computed(() => applyBaseFilters(events.value))
+
+    const filteredEvents = computed(() => {
+      let r = filteredExcludingType.value
+      if (selectedTypes.value.size)
+        r = r.filter(e => selectedTypes.value.has(e.type.substring(0, 3)))
       return r
     })
 
+    // ── Type chip counts ──────────────────────────────────
     const eventTypes = computed(() => {
       const counts = {}
       filteredExcludingType.value.forEach(e => {
@@ -141,91 +210,55 @@ createApp({
         .sort((a, b) => b.count - a.count)
     })
 
-    // ── Filtering ─────────────────────────────────────────
-    const filteredEvents = computed(() => {
-      let r = events.value
-
-      if (searchActive.value) {
-        const q = searchActive.value.toLowerCase()
-        r = r.filter(e =>
-          e.title.toLowerCase().includes(q) ||
-          e.sys.toLowerCase().includes(q)   ||
-          e.gm.toLowerCase().includes(q)    ||
-          e.desc.toLowerCase().includes(q)
-        )
-      }
-
-      if (selectedTypes.value.size)
-        r = r.filter(e => selectedTypes.value.has(e.type.substring(0, 3)))
-
-      if (filterDay.value !== 'all')
-        r = r.filter(e => e.start.startsWith(filterDay.value))
-
-      if (maxCost.value < 200)
-        r = r.filter(e => e.cost <= maxCost.value)
-
-      if (openOnly.value)
-        r = r.filter(e => e.tix > 0)
-
-      if (showPicked.value)
-        r = r.filter(e => myPicks.value.has(e.id))
-
-      return r
+    // ── Static option lists (built once after load) ───────
+    const allAges   = computed(() => Object.keys(AGE_LABELS).filter(a => events.value.some(e => e.age === a)))
+    const allExps   = computed(() => Object.keys(EXP_LABELS).filter(x => events.value.some(e => e.exp === x)))
+    const allVenues = computed(() => {
+      const seen = new Set()
+      events.value.forEach(e => { const v = normLoc(e.loc); if (v) seen.add(v) })
+      return [...seen].sort()
     })
 
-    const page     = ref(1)
-    const PAGE_SZ  = 50
-
+    // ── Pagination ────────────────────────────────────────
+    const page    = ref(1)
+    const PAGE_SZ = 50
     watch(filteredEvents, () => { page.value = 1 })
-
     const displayedEvents = computed(() => filteredEvents.value.slice(0, page.value * PAGE_SZ))
     const hasMore         = computed(() => displayedEvents.value.length < filteredEvents.value.length)
 
     // ── My Picks ──────────────────────────────────────────
     const myPicks = ref(new Set(JSON.parse(localStorage.getItem('myPicks') || '[]')))
-
-    const savePicks = () =>
-      localStorage.setItem('myPicks', JSON.stringify([...myPicks.value]))
+    const savePicks = () => localStorage.setItem('myPicks', JSON.stringify([...myPicks.value]))
 
     const togglePick = async id => {
-      const s      = new Set(myPicks.value)
+      const s = new Set(myPicks.value)
       const adding = !s.has(id)
       adding ? s.add(id) : s.delete(id)
       myPicks.value = s
       savePicks()
-
       if (groupId.value && userName.value) {
         if (adding) {
-          await sb.from('picks').insert({
-            group_id: groupId.value, user_name: userName.value, event_id: id,
-          })
+          await sb.from('picks').insert({ group_id: groupId.value, user_name: userName.value, event_id: id })
         } else {
           await sb.from('picks').delete()
-            .eq('group_id', groupId.value)
-            .eq('user_name', userName.value)
-            .eq('event_id', id)
+            .eq('group_id', groupId.value).eq('user_name', userName.value).eq('event_id', id)
         }
       }
     }
 
     // ── Schedule ──────────────────────────────────────────
     const mySchedule = computed(() =>
-      events.value
-        .filter(e => myPicks.value.has(e.id))
-        .sort((a, b) => a.start.localeCompare(b.start))
+      events.value.filter(e => myPicks.value.has(e.id)).sort((a, b) => a.start.localeCompare(b.start))
     )
 
     const conflicts = computed(() => {
       const sched = mySchedule.value
-      const ids   = new Set()
-      for (let i = 0; i < sched.length; i++) {
-        for (let j = i + 1; j < sched.length; j++) {
+      const ids = new Set()
+      for (let i = 0; i < sched.length; i++)
+        for (let j = i + 1; j < sched.length; j++)
           if (sched[i].start < sched[j].end && sched[i].end > sched[j].start) {
-            ids.add(sched[i].id)
-            ids.add(sched[j].id)
+            ids.add(sched[i].id); ids.add(sched[j].id)
           }
-        }
-      }
       return ids
     })
 
@@ -240,23 +273,19 @@ createApp({
         const d = e.start.substring(0, 10)
         ;(byDay[d] = byDay[d] || []).push(e)
       })
-      return Object.entries(byDay).map(([date, evts]) => ({
-        date,
-        label: DAY_LABELS[date] || date,
-        events: evts,
-      }))
+      return Object.entries(byDay).map(([date, evts]) => ({ date, label: DAY_LABELS[date] || date, events: evts }))
     })
 
     // ── Group ─────────────────────────────────────────────
-    const userName      = ref(localStorage.getItem('userName')  || '')
-    const groupName     = ref(localStorage.getItem('groupName') || '')
-    const groupId       = ref(localStorage.getItem('groupId')   || '')
-    const groupPicks    = ref({})   // { memberName: [eventId, …] }
+    const userName       = ref(localStorage.getItem('userName')  || '')
+    const groupName      = ref(localStorage.getItem('groupName') || '')
+    const groupId        = ref(localStorage.getItem('groupId')   || '')
+    const groupPicks     = ref({})
     const inputUserName  = ref('')
     const inputGroupName = ref('')
-    const groupLoading  = ref(false)
-    const groupError    = ref('')
-    let   realtimeCh    = null
+    const groupLoading   = ref(false)
+    const groupError     = ref('')
+    let   realtimeCh     = null
 
     const joinOrCreateGroup = async () => {
       const uname = inputUserName.value.trim()
@@ -265,7 +294,6 @@ createApp({
       groupLoading.value = true
       groupError.value   = ''
       try {
-        // Find existing group or create it
         let gid
         const { data: existing } = await sb.from('groups').select('id').eq('name', gname).maybeSingle()
         if (existing) {
@@ -275,22 +303,15 @@ createApp({
           if (error) throw error
           gid = created.id
         }
-
         userName.value  = uname
         groupName.value = gname
         groupId.value   = gid
-        localStorage.setItem('userName',  uname)
+        localStorage.setItem('userName', uname)
         localStorage.setItem('groupName', gname)
-        localStorage.setItem('groupId',   gid)
-
-        // Push existing picks to Supabase
-        const existing_picks = [...myPicks.value].map(event_id => ({
-          group_id: gid, user_name: uname, event_id,
-        }))
-        if (existing_picks.length) {
+        localStorage.setItem('groupId', gid)
+        const existing_picks = [...myPicks.value].map(event_id => ({ group_id: gid, user_name: uname, event_id }))
+        if (existing_picks.length)
           await sb.from('picks').upsert(existing_picks, { onConflict: 'group_id,user_name,event_id' })
-        }
-
         await loadGroupPicks()
         subscribeToGroup()
       } catch (err) {
@@ -303,13 +324,8 @@ createApp({
 
     const leaveGroup = () => {
       if (realtimeCh) sb.removeChannel(realtimeCh)
-      groupId.value   = ''
-      groupName.value = ''
-      userName.value  = ''
-      groupPicks.value = {}
-      localStorage.removeItem('groupId')
-      localStorage.removeItem('groupName')
-      localStorage.removeItem('userName')
+      groupId.value = ''; groupName.value = ''; userName.value = ''; groupPicks.value = {}
+      localStorage.removeItem('groupId'); localStorage.removeItem('groupName'); localStorage.removeItem('userName')
     }
 
     const loadGroupPicks = async () => {
@@ -317,30 +333,20 @@ createApp({
       const { data } = await sb.from('picks').select('user_name,event_id').eq('group_id', groupId.value)
       if (!data) return
       const picks = {}
-      data.forEach(({ user_name, event_id }) => {
-        ;(picks[user_name] = picks[user_name] || []).push(event_id)
-      })
+      data.forEach(({ user_name, event_id }) => { (picks[user_name] = picks[user_name] || []).push(event_id) })
       groupPicks.value = picks
     }
 
     const subscribeToGroup = () => {
       if (realtimeCh) sb.removeChannel(realtimeCh)
       realtimeCh = sb.channel(`group-${groupId.value}`)
-        .on('postgres_changes', {
-          event: '*', schema: 'public', table: 'picks',
-          filter: `group_id=eq.${groupId.value}`,
-        }, () => loadGroupPicks())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'picks', filter: `group_id=eq.${groupId.value}` }, () => loadGroupPicks())
         .subscribe()
     }
 
-    const isGroupPick = id =>
-      Object.entries(groupPicks.value).some(([u, picks]) => u !== userName.value && picks.includes(id))
-
-    const groupWantsCount = id =>
-      Object.entries(groupPicks.value).filter(([u, picks]) => u !== userName.value && picks.includes(id)).length || null
-
-    const sharedBy = id =>
-      Object.entries(groupPicks.value).filter(([, picks]) => picks.includes(id)).map(([u]) => u)
+    const isGroupPick    = id => Object.entries(groupPicks.value).some(([u, picks]) => u !== userName.value && picks.includes(id))
+    const groupWantsCount = id => Object.entries(groupPicks.value).filter(([u, picks]) => u !== userName.value && picks.includes(id)).length || null
+    const sharedBy       = id => Object.entries(groupPicks.value).filter(([, picks]) => picks.includes(id)).map(([u]) => u)
 
     const sharedEvents = computed(() => {
       const allIds = Object.values(groupPicks.value).flat()
@@ -358,9 +364,7 @@ createApp({
 
     // ── Modal ─────────────────────────────────────────────
     const selectedEvent = ref(null)
-
-    const closeOnEsc = e => { if (e.key === 'Escape') selectedEvent.value = null }
-    onMounted(() => window.addEventListener('keydown', closeOnEsc))
+    onMounted(() => window.addEventListener('keydown', e => { if (e.key === 'Escape') selectedEvent.value = null }))
 
     // ── Formatting ────────────────────────────────────────
     const typeCode  = type => TYPE_LABELS[type.substring(0, 3)] || type.substring(0, 3)
@@ -369,10 +373,8 @@ createApp({
     const formatTime = dt => {
       if (!dt) return ''
       const [, , , hh, mm] = dt.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
-      const h = parseInt(hh), m = mm
-      const ampm = h < 12 ? 'am' : 'pm'
-      const h12  = h % 12 || 12
-      return m === '00' ? `${h12}${ampm}` : `${h12}:${m}${ampm}`
+      const h = parseInt(hh), ampm = h < 12 ? 'am' : 'pm', h12 = h % 12 || 12
+      return mm === '00' ? `${h12}${ampm}` : `${h12}:${mm}${ampm}`
     }
 
     const formatDayShort = dt => dt ? (DAY_SHORT[dt.substring(0, 10)] || '') : ''
@@ -381,14 +383,11 @@ createApp({
     // ── ICS Export ────────────────────────────────────────
     const exportICS = () => {
       const lines = [
-        'BEGIN:VCALENDAR',
-        'VERSION:2.0',
+        'BEGIN:VCALENDAR', 'VERSION:2.0',
         'PRODID:-//GenCon 2026 Schedule Helper//EN',
-        'CALSCALE:GREGORIAN',
-        'X-WR-CALNAME:GenCon 2026',
+        'CALSCALE:GREGORIAN', 'X-WR-CALNAME:GenCon 2026',
         'X-WR-TIMEZONE:America/Indiana/Indianapolis',
       ]
-
       mySchedule.value.forEach(e => {
         const toStamp = s => s.replace(/[-:T]/g, '').padEnd(15, '0').substring(0, 15)
         lines.push(
@@ -402,39 +401,34 @@ createApp({
           'END:VEVENT',
         )
       })
-
       lines.push('END:VCALENDAR')
-
       const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' })
       const url  = URL.createObjectURL(blob)
-      const a    = Object.assign(document.createElement('a'), { href: url, download: 'gencon2026.ics' })
-      a.click()
+      Object.assign(document.createElement('a'), { href: url, download: 'gencon2026.ics' }).click()
       URL.revokeObjectURL(url)
     }
 
     // ── Init ──────────────────────────────────────────────
     onMounted(async () => {
-      const res    = await fetch('./events.json')
-      events.value = await res.json()
+      events.value  = await (await fetch('./events.json')).json()
       loading.value = false
-
-      if (groupId.value) {
-        await loadGroupPicks()
-        subscribeToGroup()
-      }
+      if (groupId.value) { await loadGroupPicks(); subscribeToGroup() }
     })
 
     return {
       loading, events, view, filtersOpen,
       search, filterDay, selectedTypes, maxCost, openOnly, showPicked,
-      days, eventTypes, filteredEvents, displayedEvents, hasMore, activeFilterCount,
+      moreFiltersOpen, selectedAges, selectedExps, maxDuration, selectedVenues, noMaterials, noTournaments,
+      days, eventTypes, allAges, allExps, allVenues,
+      filteredEvents, displayedEvents, hasMore, activeFilterCount, moreFilterCount,
       myPicks, togglePick, mySchedule, conflicts, totalCost, scheduleDays,
       userName, groupName, groupId, groupPicks,
       inputUserName, inputGroupName, groupLoading, groupError, sharedEvents,
       selectedEvent,
-      toggleType, clearFilters,
+      toggleType, toggleAge, toggleExp, toggleVenue, clearFilters,
       joinOrCreateGroup, leaveGroup, isGroupPick, groupWantsCount, sharedBy, memberCost,
       typeCode, typeColor, formatTime, formatDayShort, formatDayLong, exportICS,
+      AGE_LABELS, EXP_LABELS,
       page,
     }
   },
