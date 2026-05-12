@@ -107,10 +107,32 @@ createApp({
       return n
     })
 
-    // ── Event type summary ────────────────────────────────
+    // ── Event type summary (counts based on all filters except type) ──
+    const filteredExcludingType = computed(() => {
+      let r = events.value
+      if (searchActive.value) {
+        const q = searchActive.value.toLowerCase()
+        r = r.filter(e =>
+          e.title.toLowerCase().includes(q) ||
+          e.sys.toLowerCase().includes(q)   ||
+          e.gm.toLowerCase().includes(q)    ||
+          e.desc.toLowerCase().includes(q)
+        )
+      }
+      if (filterDay.value !== 'all')
+        r = r.filter(e => e.start.startsWith(filterDay.value))
+      if (maxCost.value < 200)
+        r = r.filter(e => e.cost <= maxCost.value)
+      if (openOnly.value)
+        r = r.filter(e => e.tix > 0)
+      if (showPicked.value)
+        r = r.filter(e => myPicks.value.has(e.id))
+      return r
+    })
+
     const eventTypes = computed(() => {
       const counts = {}
-      events.value.forEach(e => {
+      filteredExcludingType.value.forEach(e => {
         const code = e.type.substring(0, 3)
         counts[code] = (counts[code] || 0) + 1
       })
