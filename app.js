@@ -383,7 +383,8 @@ createApp({
 
     const formatTime = dt => {
       if (!dt) return ''
-      const [, , , hh, mm] = dt.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+      const [, timePart] = dt.split('T')
+      const [hh, mm] = timePart.split(':')
       const h = parseInt(hh), ampm = h < 12 ? 'am' : 'pm', h12 = h % 12 || 12
       return mm === '00' ? `${h12}${ampm}` : `${h12}:${mm}${ampm}`
     }
