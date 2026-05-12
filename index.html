@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GenCon 2026 Schedule Helper</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- Loading -->
+  <div v-if="loading" class="loading-screen">
+    <div class="spinner"></div>
+    <p>Loading 25,000+ events…</p>
+  </div>
+
+  <template v-else>
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-brand">
+        <span class="brand-name">GenCon 2026</span>
+        <span class="brand-sub">Schedule Helper</span>
+      </div>
+      <nav class="header-nav">
+        <button @click="view='browse'" :class="['nav-btn', {active: view==='browse'}]">Browse</button>
+        <button @click="view='schedule'" :class="['nav-btn', {active: view==='schedule'}]">
+          My Schedule<span v-if="myPicks.size" class="nav-count">{{ myPicks.size }}</span>
+        </button>
+        <button @click="view='group'" :class="['nav-btn', {active: view==='group'}]">
+          Group<span v-if="groupId" class="nav-dot"></span>
+        </button>
+      </nav>
+      <!-- Mobile filter toggle -->
+      <button class="filter-toggle" @click="filtersOpen = !filtersOpen" aria-label="Toggle filters">
+        <span>Filters</span>
+        <span v-if="activeFilterCount" class="filter-badge">{{ activeFilterCount }}</span>
+      </button>
+    </header>
+
+    <!-- ═══════════════ BROWSE VIEW ═══════════════ -->
+    <div v-show="view==='browse'" class="browse-layout">
+
+      <!-- Filter Sidebar -->
+      <aside :class="['filters-panel', {open: filtersOpen}]">
+        <div class="filters-inner">
+
+          <div class="filter-section">
+            <input
+              v-model="search"
+              type="search"
+              placeholder="Search titles, games, GMs…"
+              class="search-input"
+              autocomplete="off"
+            >
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Day</div>
+            <div class="day-tabs">
+              <button v-for="d in days" :key="d.value"
+                @click="filterDay = d.value"
+                :class="['day-tab', {active: filterDay === d.value}]">
+                {{ d.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Event Type</div>
+            <div class="type-grid">
+              <button v-for="t in eventTypes" :key="t.code"
+                @click="toggleType(t.code)"
+                :class="['type-chip', {active: selectedTypes.has(t.code)}]"
+                :style="selectedTypes.has(t.code) ? {background: t.color, borderColor: t.color, color:'#fff'} : {borderColor: t.color, color: t.color}">
+                {{ t.code }}<small>{{ t.count.toLocaleString() }}</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Max Cost: <strong>{{ maxCost >= 200 ? '$200+' : '$' + maxCost }}</strong></div>
+            <input type="range" v-model.number="maxCost" min="0" max="200" step="5" class="range-slider">
+            <div class="range-labels"><span>Free</span><span>$200+</span></div>
+          </div>
+
+          <div class="filter-section filter-toggles">
+            <label class="check-label">
+              <input type="checkbox" v-model="openOnly"> Available tickets only
+            </label>
+            <label class="check-label">
+              <input type="checkbox" v-model="showPicked"> My picks only
+            </label>
+          </div>
+
+          <div class="filter-footer">
+            <span class="result-count"><strong>{{ filteredEvents.length.toLocaleString() }}</strong> events</span>
+            <button v-if="activeFilterCount" @click="clearFilters" class="clear-btn">Clear all</button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Event List -->
+      <main class="events-panel">
+        <div v-if="filteredEvents.length === 0" class="empty-state">
+          <p>No events match your filters.</p>
+          <button @click="clearFilters" class="btn-primary">Clear filters</button>
+        </div>
+
+        <div class="event-list">
+          <div
+            v-for="e in displayedEvents"
+            :key="e.id"
+            class="event-card"
+            :class="{
+              'is-picked': myPicks.has(e.id),
+              'is-conflict': conflicts.has(e.id),
+              'is-group': isGroupPick(e.id) && !myPicks.has(e.id)
+            }"
+            @click="selectedEvent = e"
+          >
+            <div class="card-top">
+              <span class="type-badge" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+              <span class="card-title">{{ e.title }}</span>
+              <button
+                class="pick-btn"
+                :class="{picked: myPicks.has(e.id)}"
+                @click.stop="togglePick(e.id)"
+                :title="myPicks.has(e.id) ? 'Remove from schedule' : 'Add to schedule'"
+              >{{ myPicks.has(e.id) ? '✓' : '+' }}</button>
+            </div>
+            <div class="card-meta">
+              <span>{{ formatDayShort(e.start) }} {{ formatTime(e.start) }}</span>
+              <span>{{ e.dur }}h</span>
+              <span>{{ e.minP }}–{{ e.maxP }} players</span>
+              <span :class="{free: e.cost === 0}">{{ e.cost === 0 ? 'Free' : '$' + e.cost }}</span>
+              <span :class="{sold: e.tix === 0, low: e.tix > 0 && e.tix <= 3}">
+                {{ e.tix === 0 ? 'Sold out' : e.tix + ' tickets' }}
+              </span>
+            </div>
+            <div class="card-footer">
+              <span v-if="e.loc" class="card-loc">{{ e.loc }}{{ e.room ? ' · ' + e.room : '' }}</span>
+              <span v-if="e.gm" class="card-gm">GM: {{ e.gm }}</span>
+              <span v-if="groupWantsCount(e.id)" class="group-interest">
+                ⭐ {{ groupWantsCount(e.id) }} {{ groupWantsCount(e.id) === 1 ? 'person' : 'people' }} in your group want this
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="hasMore" class="load-more">
+          <button @click="page++" class="load-more-btn">
+            Show more ({{ displayedEvents.length }} of {{ filteredEvents.length.toLocaleString() }})
+          </button>
+        </div>
+      </main>
+    </div>
+
+    <!-- ═══════════════ SCHEDULE VIEW ═══════════════ -->
+    <div v-show="view==='schedule'" class="schedule-view">
+      <div v-if="myPicks.size === 0" class="empty-state centered">
+        <h2>No events picked yet</h2>
+        <p>Browse events and tap + to add them to your schedule.</p>
+        <button @click="view='browse'" class="btn-primary">Browse Events</button>
+      </div>
+
+      <template v-else>
+        <div class="schedule-toolbar">
+          <div class="schedule-stats">
+            <span><strong>{{ myPicks.size }}</strong> events</span>
+            <span>Total: <strong>${{ totalCost }}</strong></span>
+            <span v-if="conflicts.size" class="conflict-pill">⚠ {{ conflicts.size }} conflict{{ conflicts.size > 1 ? 's' : '' }}</span>
+          </div>
+          <button @click="exportICS" class="btn-secondary">⬇ Export .ics</button>
+        </div>
+
+        <div v-for="day in scheduleDays" :key="day.date" class="schedule-day">
+          <h2 class="day-heading">{{ day.label }}</h2>
+          <div
+            v-for="e in day.events"
+            :key="e.id"
+            class="schedule-event"
+            :class="{'is-conflict': conflicts.has(e.id)}"
+            @click="selectedEvent = e"
+          >
+            <div class="sched-time">
+              <span class="sched-start">{{ formatTime(e.start) }}</span>
+              <span class="sched-end">{{ formatTime(e.end) }}</span>
+            </div>
+            <div class="sched-info">
+              <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+              <div class="sched-title-block">
+                <span class="sched-title">{{ e.title }}</span>
+                <span class="sched-loc">{{ e.loc }}{{ e.room ? ' · ' + e.room : '' }}</span>
+              </div>
+            </div>
+            <div class="sched-right">
+              <span class="sched-cost">{{ e.cost === 0 ? 'Free' : '$' + e.cost }}</span>
+              <button @click.stop="togglePick(e.id)" class="remove-btn" title="Remove">✕</button>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- ═══════════════ GROUP VIEW ═══════════════ -->
+    <div v-show="view==='group'" class="group-view">
+
+      <!-- Setup form -->
+      <div v-if="!groupId" class="group-setup">
+        <div class="setup-card">
+          <h2>Join or Create a Group</h2>
+          <p>Share a group name with your friends to coordinate your GenCon schedules in real time.</p>
+          <div class="setup-form">
+            <input v-model="inputUserName" placeholder="Your name" class="text-input" maxlength="40">
+            <input v-model="inputGroupName" placeholder="Group name (e.g. die-hards-2026)" class="text-input" maxlength="60"
+              @keyup.enter="joinOrCreateGroup">
+            <button
+              @click="joinOrCreateGroup"
+              :disabled="!inputUserName.trim() || !inputGroupName.trim() || groupLoading"
+              class="btn-primary">
+              {{ groupLoading ? 'Connecting…' : 'Join or Create Group' }}
+            </button>
+          </div>
+          <p v-if="groupError" class="error-msg">{{ groupError }}</p>
+        </div>
+      </div>
+
+      <!-- Group dashboard -->
+      <div v-else class="group-dashboard">
+        <div class="group-header">
+          <div>
+            <h2>{{ groupName }}</h2>
+            <p class="group-you">You: <strong>{{ userName }}</strong></p>
+          </div>
+          <button @click="leaveGroup" class="btn-ghost">Leave group</button>
+        </div>
+
+        <!-- Member summary -->
+        <div class="member-list">
+          <div v-for="(picks, member) in groupPicks" :key="member" class="member-row">
+            <span class="member-name" :class="{you: member === userName}">
+              {{ member }}{{ member === userName ? ' (you)' : '' }}
+            </span>
+            <span class="member-events">{{ picks.length }} events</span>
+            <span class="member-cost">${{ memberCost(member) }}</span>
+          </div>
+          <div v-if="Object.keys(groupPicks).length === 0" class="muted-text">
+            No picks yet — invite friends to join "{{ groupName }}"
+          </div>
+        </div>
+
+        <!-- Shared interests -->
+        <div v-if="sharedEvents.length" class="shared-section">
+          <h3 class="section-heading">⭐ Shared Interests</h3>
+          <div
+            v-for="e in sharedEvents"
+            :key="e.id"
+            class="shared-event"
+            @click="selectedEvent = e"
+          >
+            <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+            <div class="shared-info">
+              <span class="shared-title">{{ e.title }}</span>
+              <span class="shared-when">{{ formatDayShort(e.start) }} {{ formatTime(e.start) }}</span>
+            </div>
+            <span class="shared-who">{{ sharedBy(e.id).join(', ') }}</span>
+          </div>
+        </div>
+
+        <p class="group-hint muted-text">Share the group name <strong>"{{ groupName }}"</strong> with friends — picks sync in real time.</p>
+      </div>
+    </div>
+
+    <!-- ═══════════════ EVENT MODAL ═══════════════ -->
+    <div v-if="selectedEvent" class="modal-backdrop" @click.self="selectedEvent = null">
+      <div class="modal" role="dialog">
+        <button class="modal-close" @click="selectedEvent = null" aria-label="Close">✕</button>
+
+        <div class="modal-head">
+          <span class="type-badge lg" :style="{background: typeColor(selectedEvent.type)}">{{ selectedEvent.type }}</span>
+          <h2 class="modal-title">{{ selectedEvent.title }}</h2>
+          <p v-if="selectedEvent.grp" class="modal-grp">by {{ selectedEvent.grp }}</p>
+        </div>
+
+        <div class="modal-body">
+          <p v-if="selectedEvent.desc" class="modal-desc">{{ selectedEvent.desc }}</p>
+
+          <div class="modal-grid">
+            <div class="modal-row">
+              <span class="modal-label">When</span>
+              <span>{{ formatDayLong(selectedEvent.start) }}, {{ formatTime(selectedEvent.start) }} – {{ formatTime(selectedEvent.end) }} ({{ selectedEvent.dur }}h)</span>
+            </div>
+            <div class="modal-row">
+              <span class="modal-label">Where</span>
+              <span>{{ selectedEvent.loc }}{{ selectedEvent.room ? ', ' + selectedEvent.room : '' }}{{ selectedEvent.tbl && selectedEvent.tbl !== 'None' ? ', Table ' + selectedEvent.tbl : '' }}</span>
+            </div>
+            <div class="modal-row">
+              <span class="modal-label">Players</span>
+              <span>{{ selectedEvent.minP }}–{{ selectedEvent.maxP }}</span>
+            </div>
+            <div class="modal-row">
+              <span class="modal-label">Age</span>
+              <span>{{ selectedEvent.age || '—' }}</span>
+            </div>
+            <div class="modal-row">
+              <span class="modal-label">Experience</span>
+              <span>{{ selectedEvent.exp || '—' }}</span>
+            </div>
+            <div v-if="selectedEvent.sys" class="modal-row">
+              <span class="modal-label">System</span>
+              <span>{{ selectedEvent.sys }}</span>
+            </div>
+            <div v-if="selectedEvent.gm" class="modal-row">
+              <span class="modal-label">GM</span>
+              <span>{{ selectedEvent.gm }}</span>
+            </div>
+            <div class="modal-row">
+              <span class="modal-label">Cost</span>
+              <span>{{ selectedEvent.cost === 0 ? 'Free' : '$' + selectedEvent.cost }}</span>
+            </div>
+            <div class="modal-row">
+              <span class="modal-label">Tickets</span>
+              <span :class="{sold: selectedEvent.tix === 0}">
+                {{ selectedEvent.tix === 0 ? 'Sold out' : selectedEvent.tix + ' available' }}
+              </span>
+            </div>
+            <div class="modal-row">
+              <span class="modal-label">Event ID</span>
+              <span class="mono">{{ selectedEvent.id }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-foot">
+          <span v-if="conflicts.has(selectedEvent.id)" class="conflict-warn">⚠ Conflicts with another pick</span>
+          <button
+            @click="togglePick(selectedEvent.id)"
+            :class="myPicks.has(selectedEvent.id) ? 'btn-danger' : 'btn-primary'"
+          >
+            {{ myPicks.has(selectedEvent.id) ? '✕ Remove from Schedule' : '+ Add to Schedule' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </template>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
