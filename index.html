@@ -74,7 +74,7 @@
                 @click="toggleType(t.code)"
                 :class="['type-chip', {active: selectedTypes.has(t.code)}]"
                 :style="selectedTypes.has(t.code) ? {background: t.color, borderColor: t.color, color:'#fff'} : {borderColor: t.color, color: t.color}">
-                {{ t.code }}<small>{{ t.count.toLocaleString() }}</small>
+                {{ t.label }}<small>{{ t.count.toLocaleString() }}</small>
               </button>
             </div>
           </div>

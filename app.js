@@ -9,6 +9,28 @@ const TYPE_COLORS = {
   ENT: '#db2777', FLM: '#b91c1c', TRD: '#64748b',
 }
 
+const TYPE_LABELS = {
+  BGM: 'Board Game',
+  RPG: 'RPG',
+  CGM: 'Card Game',
+  TCG: 'Trading Card',
+  ESC: 'Escape Room',
+  NMN: 'Miniatures',
+  TDA: 'True Dungeon',
+  ZED: 'Other',
+  WKS: 'Workshop',
+  MHE: 'Mini Hobby',
+  EGM: 'Video Game',
+  SEM: 'Seminar',
+  SPA: 'Activity',
+  HMN: 'Hist. Minis',
+  KID: 'Kids',
+  LRP: 'LARP',
+  ENT: 'Entertainment',
+  FLM: 'Film',
+  TRD: 'Trade Day',
+}
+
 const DAY_LABELS = {
   '2026-07-30': 'Thursday, July 30',
   '2026-07-31': 'Friday, July 31',
@@ -93,7 +115,7 @@ createApp({
         counts[code] = (counts[code] || 0) + 1
       })
       return Object.entries(counts)
-        .map(([code, count]) => ({ code, count, color: TYPE_COLORS[code] || '#6b7280' }))
+        .map(([code, count]) => ({ code, count, color: TYPE_COLORS[code] || '#6b7280', label: TYPE_LABELS[code] || code }))
         .sort((a, b) => b.count - a.count)
     })
 
@@ -319,7 +341,7 @@ createApp({
     onMounted(() => window.addEventListener('keydown', closeOnEsc))
 
     // ── Formatting ────────────────────────────────────────
-    const typeCode  = type => type.substring(0, 3)
+    const typeCode  = type => TYPE_LABELS[type.substring(0, 3)] || type.substring(0, 3)
     const typeColor = type => TYPE_COLORS[type.substring(0, 3)] || '#6b7280'
 
     const formatTime = dt => {
