@@ -60,8 +60,8 @@
             <div class="filter-label">Day</div>
             <div class="day-tabs">
               <button v-for="d in days" :key="d.value"
-                @click="filterDay = d.value"
-                :class="['day-tab', {active: filterDay === d.value}]">
+                @click="toggleDay(d.value)"
+                :class="['day-tab', {active: filterDay.has(d.value)}]">
                 {{ d.label }}
               </button>
             </div>

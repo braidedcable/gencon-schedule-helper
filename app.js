@@ -71,7 +71,8 @@ createApp({
     // ── Filters ──────────────────────────────────────────
     const search           = ref('')
     const searchActive     = ref('')
-    const filterDay        = ref('all')
+    const ALL_DAYS = ['2026-07-30', '2026-07-31', '2026-08-01', '2026-08-02']
+    const filterDay        = ref(new Set(ALL_DAYS))
     const selectedTypes    = ref(new Set())
     const maxCost          = ref(200)
     const openOnly         = ref(false)
@@ -92,7 +93,6 @@ createApp({
     })
 
     const days = [
-      { value: 'all',        label: 'All' },
       { value: '2026-07-30', label: 'Thu' },
       { value: '2026-07-31', label: 'Fri' },
       { value: '2026-08-01', label: 'Sat' },
@@ -105,6 +105,13 @@ createApp({
       refVal.value = s
     }
 
+    const toggleDay   = date => {
+      // Require at least one day selected
+      const s = new Set(filterDay.value)
+      if (s.has(date) && s.size === 1) return
+      s.has(date) ? s.delete(date) : s.add(date)
+      filterDay.value = s
+    }
     const toggleType  = code => toggleSet(selectedTypes,  code)
     const toggleAge   = age  => toggleSet(selectedAges,   age)
     const toggleExp   = exp  => toggleSet(selectedExps,   exp)
@@ -113,7 +120,7 @@ createApp({
     const clearFilters = () => {
       search.value         = ''
       searchActive.value   = ''
-      filterDay.value      = 'all'
+      filterDay.value      = new Set(ALL_DAYS)
       selectedTypes.value  = new Set()
       maxCost.value        = 200
       openOnly.value       = false
@@ -129,7 +136,7 @@ createApp({
     const activeFilterCount = computed(() => {
       let n = 0
       if (searchActive.value)       n++
-      if (filterDay.value !== 'all') n++
+      if (filterDay.value.size < ALL_DAYS.length) n++
       n += selectedTypes.value.size
       if (maxCost.value < 200)       n++
       if (openOnly.value)            n++
@@ -167,8 +174,8 @@ createApp({
           e.desc.toLowerCase().includes(q)
         )
       }
-      if (filterDay.value !== 'all')
-        r = r.filter(e => e.start.startsWith(filterDay.value))
+      if (filterDay.value.size < ALL_DAYS.length)
+        r = r.filter(e => filterDay.value.has(e.start.substring(0, 10)))
       if (maxCost.value < 200)
         r = r.filter(e => e.cost <= maxCost.value)
       if (openOnly.value)
@@ -438,7 +445,7 @@ createApp({
       userName, groupName, groupId, groupPicks,
       inputUserName, inputGroupName, groupLoading, groupError, sharedEvents,
       selectedEvent,
-      toggleType, toggleAge, toggleExp, toggleVenue, clearFilters,
+      toggleDay, toggleType, toggleAge, toggleExp, toggleVenue, clearFilters,
       joinOrCreateGroup, leaveGroup, isGroupPick, groupWantsCount, sharedBy, memberCost,
       typeCode, typeColor, formatTime, formatDayShort, formatDayLong, exportICS,
       AGE_LABELS, EXP_LABELS,
