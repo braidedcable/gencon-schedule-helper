@@ -66,6 +66,7 @@ createApp({
     const events      = ref([])
     const view        = ref('browse')
     const filtersOpen = ref(false)
+    const authUserId  = ref(null)
 
     // ── Filters ──────────────────────────────────────────
     const search           = ref('')
@@ -238,7 +239,10 @@ createApp({
       savePicks()
       if (groupId.value && userName.value) {
         if (adding) {
-          await sb.from('picks').insert({ group_id: groupId.value, user_name: userName.value, event_id: id })
+          await sb.from('picks').insert({
+            group_id: groupId.value, user_name: userName.value,
+            event_id: id, user_auth_id: authUserId.value,
+          })
         } else {
           await sb.from('picks').delete()
             .eq('group_id', groupId.value).eq('user_name', userName.value).eq('event_id', id)
@@ -309,7 +313,7 @@ createApp({
         localStorage.setItem('userName', uname)
         localStorage.setItem('groupName', gname)
         localStorage.setItem('groupId', gid)
-        const existing_picks = [...myPicks.value].map(event_id => ({ group_id: gid, user_name: uname, event_id }))
+        const existing_picks = [...myPicks.value].map(event_id => ({ group_id: gid, user_name: uname, event_id, user_auth_id: authUserId.value }))
         if (existing_picks.length)
           await sb.from('picks').upsert(existing_picks, { onConflict: 'group_id,user_name,event_id' })
         await loadGroupPicks()
@@ -410,13 +414,22 @@ createApp({
 
     // ── Init ──────────────────────────────────────────────
     onMounted(async () => {
+      // Establish anonymous session (silent, no login required)
+      const { data: { session } } = await sb.auth.getSession()
+      if (session?.user) {
+        authUserId.value = session.user.id
+      } else {
+        const { data } = await sb.auth.signInAnonymously()
+        authUserId.value = data.user?.id
+      }
+
       events.value  = await (await fetch('./events.json')).json()
       loading.value = false
       if (groupId.value) { await loadGroupPicks(); subscribeToGroup() }
     })
 
     return {
-      loading, events, view, filtersOpen,
+      loading, events, view, filtersOpen, authUserId,
       search, filterDay, selectedTypes, maxCost, openOnly, showPicked,
       moreFiltersOpen, selectedAges, selectedExps, maxDuration, selectedVenues, noMaterials, noTournaments,
       days, eventTypes, allAges, allExps, allVenues,
