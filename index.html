@@ -236,29 +236,41 @@
           <button @click="exportICS" class="btn-secondary">⬇ Export .ics</button>
         </div>
 
-        <div v-for="day in scheduleDays" :key="day.date" class="schedule-day">
-          <h2 class="day-heading">{{ day.label }}</h2>
-          <div
-            v-for="e in day.events"
-            :key="e.id"
-            class="schedule-event"
-            :class="{'is-conflict': conflicts.has(e.id)}"
-            @click="selectedEvent = e"
-          >
-            <div class="sched-time">
-              <span class="sched-start">{{ formatTime(e.start) }}</span>
-              <span class="sched-end">{{ formatTime(e.end) }}</span>
+        <!-- Day tabs -->
+        <div class="sched-day-tabs">
+          <button v-for="day in scheduleDays" :key="day.date"
+            @click="scheduleDay = day.date"
+            :class="['sched-day-tab', {active: scheduleDay === day.date}]">
+            {{ day.shortLabel }}
+            <span class="sched-day-count">{{ day.events.length }}</span>
+          </button>
+        </div>
+
+        <!-- Visual timeline -->
+        <div class="timeline-outer">
+          <div class="timeline-ruler">
+            <div v-for="h in timelineHours" :key="h" class="ruler-slot" :style="{height: PX_PER_HOUR + 'px'}">
+              {{ formatHour(h) }}
             </div>
-            <div class="sched-info">
-              <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
-              <div class="sched-title-block">
-                <span class="sched-title">{{ e.title }}</span>
-                <span class="sched-loc">{{ e.loc }}{{ e.room ? ' · ' + e.room : '' }}</span>
+          </div>
+          <div class="timeline-canvas" :style="{height: timelineHeight + 'px'}">
+            <div v-for="h in timelineHours" :key="'g'+h" class="tl-gridline"
+              :style="{top: (h - timelineBounds.start) * PX_PER_HOUR + 'px'}"></div>
+            <div
+              v-for="e in timelineEvents"
+              :key="e.id"
+              class="tl-event"
+              :class="{'tl-conflict': conflicts.has(e.id)}"
+              :style="eventTimelineStyle(e)"
+              @click="selectedEvent = e"
+            >
+              <div class="tl-event-title">{{ e.title }}</div>
+              <div class="tl-event-meta">
+                <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+                <span>{{ e.loc }}</span>
+                <span>{{ e.cost === 0 ? 'Free' : '$' + e.cost }}</span>
               </div>
-            </div>
-            <div class="sched-right">
-              <span class="sched-cost">{{ e.cost === 0 ? 'Free' : '$' + e.cost }}</span>
-              <button @click.stop="togglePick(e.id)" class="remove-btn" title="Remove">✕</button>
+              <button class="tl-remove" @click.stop="togglePick(e.id)" title="Remove">✕</button>
             </div>
           </div>
         </div>
@@ -301,6 +313,7 @@
         <!-- Member summary -->
         <div class="member-list">
           <div v-for="(picks, member) in groupPicks" :key="member" class="member-row">
+            <span class="member-dot" :style="{background: memberColors[member]}"></span>
             <span class="member-name" :class="{you: member === userName}">
               {{ member }}{{ member === userName ? ' (you)' : '' }}
             </span>
@@ -326,7 +339,34 @@
               <span class="shared-title">{{ e.title }}</span>
               <span class="shared-when">{{ formatDayShort(e.start) }} {{ formatTime(e.start) }}</span>
             </div>
-            <span class="shared-who">{{ sharedBy(e.id).join(', ') }}</span>
+            <div class="shared-who-list">
+              <span v-for="m in sharedBy(e.id)" :key="m" class="member-tag"
+                :style="{background: memberColors[m] + '22', color: memberColors[m], borderColor: memberColors[m] + '55'}">
+                {{ m }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group schedule: all picks by day/time -->
+        <div v-if="groupSchedule.length" class="group-sched-section">
+          <h3 class="section-heading">Group Schedule</h3>
+          <div v-for="day in groupSchedule" :key="day.date" class="group-sched-day">
+            <h4 class="group-sched-day-label">{{ day.label }}</h4>
+            <div v-for="e in day.events" :key="e.id" class="group-sched-event" @click="selectedEvent = e">
+              <div class="group-sched-time">{{ formatTime(e.start) }}</div>
+              <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+              <div class="group-sched-info">
+                <span class="group-sched-title">{{ e.title }}</span>
+                <span class="group-sched-loc">{{ e.loc }}</span>
+              </div>
+              <div class="group-sched-members">
+                <span v-for="m in whoWants(e.id)" :key="m" class="member-tag"
+                  :style="{background: memberColors[m] + '22', color: memberColors[m], borderColor: memberColors[m] + '55'}">
+                  {{ m }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -396,6 +436,10 @@
 
         <div class="modal-foot">
           <span v-if="conflicts.has(selectedEvent.id)" class="conflict-warn">⚠ Conflicts with another pick</span>
+          <a :href="`https://www.gencon.com/event-catalog?q=${selectedEvent.id}`"
+            target="_blank" rel="noopener" class="btn-secondary">
+            View on GenCon ↗
+          </a>
           <button
             @click="togglePick(selectedEvent.id)"
             :class="myPicks.has(selectedEvent.id) ? 'btn-danger' : 'btn-primary'"

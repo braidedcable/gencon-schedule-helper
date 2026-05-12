@@ -278,14 +278,80 @@ createApp({
       return Number.isInteger(sum) ? sum : sum.toFixed(2)
     })
 
+    const DAY_SHORT_LABEL = { '2026-07-30': 'Thu', '2026-07-31': 'Fri', '2026-08-01': 'Sat', '2026-08-02': 'Sun' }
+
     const scheduleDays = computed(() => {
       const byDay = {}
       mySchedule.value.forEach(e => {
         const d = e.start.substring(0, 10)
         ;(byDay[d] = byDay[d] || []).push(e)
       })
-      return Object.entries(byDay).map(([date, evts]) => ({ date, label: DAY_LABELS[date] || date, events: evts }))
+      return Object.entries(byDay).map(([date, evts]) => ({
+        date,
+        label: DAY_LABELS[date] || date,
+        shortLabel: DAY_SHORT_LABEL[date] || date,
+        events: evts,
+      }))
     })
+
+    // ── Timeline ──────────────────────────────────────────
+    const PX_PER_HOUR = 80
+    const scheduleDay = ref(null)
+
+    watch(scheduleDays, days => {
+      if (!days.length) { scheduleDay.value = null; return }
+      if (!days.find(d => d.date === scheduleDay.value))
+        scheduleDay.value = days[0].date
+    }, { immediate: true })
+
+    const timelineEvents = computed(() =>
+      scheduleDay.value
+        ? mySchedule.value.filter(e => e.start.startsWith(scheduleDay.value))
+        : []
+    )
+
+    const timelineBounds = computed(() => {
+      const evts = timelineEvents.value
+      if (!evts.length) return { start: 9, end: 18 }
+      const startHours = evts.map(e => parseInt(e.start.substring(11, 13)))
+      const endHours   = evts.map(e => {
+        const h = parseInt(e.end.substring(11, 13))
+        const m = parseInt(e.end.substring(14, 16))
+        return h + (m > 0 ? 1 : 0)
+      })
+      return {
+        start: Math.max(0,  Math.min(...startHours) - 1),
+        end:   Math.min(24, Math.max(...endHours)   + 1),
+      }
+    })
+
+    const timelineHours  = computed(() => {
+      const { start, end } = timelineBounds.value
+      return Array.from({ length: end - start }, (_, i) => start + i)
+    })
+
+    const timelineHeight = computed(() =>
+      (timelineBounds.value.end - timelineBounds.value.start) * PX_PER_HOUR
+    )
+
+    const eventTimelineStyle = e => {
+      const { start } = timelineBounds.value
+      const sh = parseInt(e.start.substring(11, 13)) + parseInt(e.start.substring(14, 16)) / 60
+      let   eh = parseInt(e.end.substring(11, 13))   + parseInt(e.end.substring(14, 16))   / 60
+      if (eh <= sh) eh += 24  // handle midnight crossover
+      return {
+        top:        (sh - start) * PX_PER_HOUR + 'px',
+        height:     Math.max((eh - sh) * PX_PER_HOUR - 4, 28) + 'px',
+        background: typeColor(e.type),
+      }
+    }
+
+    const formatHour = h => {
+      const hh = h % 24
+      if (hh === 0)  return '12am'
+      if (hh === 12) return '12pm'
+      return hh < 12 ? `${hh}am` : `${hh - 12}pm`
+    }
 
     // ── Group ─────────────────────────────────────────────
     const userName       = ref(localStorage.getItem('userName')  || '')
@@ -373,6 +439,39 @@ createApp({
         return sum + (e ? e.cost : 0)
       }, 0)
 
+    const MEMBER_PALETTE = [
+      '#4f46e5', '#dc2626', '#059669', '#d97706',
+      '#7c3aed', '#0891b2', '#be185d', '#16a34a',
+    ]
+    const memberColors = computed(() => {
+      const colors = {}
+      Object.keys(groupPicks.value).forEach((name, i) => {
+        colors[name] = MEMBER_PALETTE[i % MEMBER_PALETTE.length]
+      })
+      return colors
+    })
+
+    const whoWants = id =>
+      Object.entries(groupPicks.value)
+        .filter(([, picks]) => picks.includes(id))
+        .map(([name]) => name)
+
+    const groupSchedule = computed(() => {
+      const allEventIds = new Set(Object.values(groupPicks.value).flat())
+      const allEvents = events.value.filter(e => allEventIds.has(e.id))
+        .sort((a, b) => a.start.localeCompare(b.start))
+      const byDay = {}
+      allEvents.forEach(e => {
+        const d = e.start.substring(0, 10)
+        ;(byDay[d] = byDay[d] || []).push(e)
+      })
+      return Object.entries(byDay).map(([date, evts]) => ({
+        date,
+        label: DAY_LABELS[date] || date,
+        events: evts,
+      }))
+    })
+
     // ── Modal ─────────────────────────────────────────────
     const selectedEvent = ref(null)
     onMounted(() => window.addEventListener('keydown', e => { if (e.key === 'Escape') selectedEvent.value = null }))
@@ -443,8 +542,11 @@ createApp({
       days, eventTypes, allAges, allExps, allVenues,
       filteredEvents, displayedEvents, hasMore, activeFilterCount, moreFilterCount,
       myPicks, togglePick, mySchedule, conflicts, totalCost, scheduleDays,
+      scheduleDay, timelineEvents, timelineBounds, timelineHours, timelineHeight,
+      eventTimelineStyle, formatHour, PX_PER_HOUR,
       userName, groupName, groupId, groupPicks,
       inputUserName, inputGroupName, groupLoading, groupError, sharedEvents,
+      memberColors, whoWants, groupSchedule,
       selectedEvent,
       toggleDay, toggleType, toggleAge, toggleExp, toggleVenue, clearFilters,
       joinOrCreateGroup, leaveGroup, isGroupPick, groupWantsCount, sharedBy, memberCost,
