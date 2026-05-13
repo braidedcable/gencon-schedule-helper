@@ -246,10 +246,9 @@ createApp({
       savePicks()
       if (groupId.value && userName.value) {
         if (adding) {
-          await sb.from('picks').insert({
-            group_id: groupId.value, user_name: userName.value,
-            event_id: id, user_auth_id: authUserId.value,
-          })
+          const row = { group_id: groupId.value, user_name: userName.value, event_id: id }
+          if (authUserId.value) row.user_auth_id = authUserId.value
+          await sb.from('picks').insert(row)
         } else {
           await sb.from('picks').delete()
             .eq('group_id', groupId.value).eq('user_name', userName.value).eq('event_id', id)
@@ -386,7 +385,11 @@ createApp({
         localStorage.setItem('userName', uname)
         localStorage.setItem('groupName', gname)
         localStorage.setItem('groupId', gid)
-        const existing_picks = [...myPicks.value].map(event_id => ({ group_id: gid, user_name: uname, event_id, user_auth_id: authUserId.value }))
+        const existing_picks = [...myPicks.value].map(event_id => {
+          const row = { group_id: gid, user_name: uname, event_id }
+          if (authUserId.value) row.user_auth_id = authUserId.value
+          return row
+        })
         if (existing_picks.length)
           await sb.from('picks').upsert(existing_picks, { onConflict: 'group_id,user_name,event_id' })
         await loadGroupPicks()
@@ -521,14 +524,16 @@ createApp({
 
     // ── Init ──────────────────────────────────────────────
     onMounted(async () => {
-      // Establish anonymous session (silent, no login required)
-      const { data: { session } } = await sb.auth.getSession()
-      if (session?.user) {
-        authUserId.value = session.user.id
-      } else {
-        const { data } = await sb.auth.signInAnonymously()
-        authUserId.value = data.user?.id
-      }
+      // Try to establish an anonymous session; non-fatal if the provider is disabled
+      try {
+        const { data: { session } } = await sb.auth.getSession()
+        if (session?.user) {
+          authUserId.value = session.user.id
+        } else {
+          const { data } = await sb.auth.signInAnonymously()
+          authUserId.value = data.user?.id ?? null
+        }
+      } catch (_) { /* anonymous auth disabled — picks work without it */ }
 
       events.value  = await (await fetch('./events.json')).json()
       loading.value = false
