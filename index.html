@@ -436,7 +436,7 @@
 
         <div class="modal-foot">
           <span v-if="conflicts.has(selectedEvent.id)" class="conflict-warn">⚠ Conflicts with another pick</span>
-          <a :href="`https://www.gencon.com/event-catalog?q=${selectedEvent.id}`"
+          <a :href="`https://www.gencon.com/events/${selectedEvent.id.match(/\d+$/)[0]}`"
             target="_blank" rel="noopener" class="btn-secondary">
             View on GenCon ↗
           </a>
