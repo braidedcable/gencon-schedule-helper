@@ -497,6 +497,90 @@ createApp({
     const formatDayShort = dt => dt ? (DAY_SHORT[dt.substring(0, 10)] || '') : ''
     const formatDayLong  = dt => dt ? (DAY_LABELS[dt.substring(0, 10)] || dt.substring(0, 10)) : ''
 
+    // ── Deep Links ────────────────────────────────────────
+    const sharedPickIds   = ref([])
+    const shareLinkCopied = ref(false)
+    const groupLinkCopied = ref(false)
+
+    const setView = v => {
+      view.value = v
+      if (v !== 'shared') history.pushState(null, '', '#' + v)
+    }
+
+    const parseHash = () => {
+      const hash = decodeURIComponent(window.location.hash.slice(1))
+      if (hash.startsWith('shared/')) {
+        sharedPickIds.value = hash.slice(7).split(',').filter(Boolean)
+        view.value = 'shared'
+      } else if (hash.startsWith('group/')) {
+        inputGroupName.value = hash.slice(6)
+        view.value = 'group'
+      } else if (['browse', 'schedule', 'group'].includes(hash)) {
+        view.value = hash
+      }
+    }
+
+    const copyShareLink = async () => {
+      const ids = [...myPicks.value].join(',')
+      const url = `${location.origin}${location.pathname}#shared/${ids}`
+      try {
+        await navigator.clipboard.writeText(url)
+        shareLinkCopied.value = true
+        setTimeout(() => { shareLinkCopied.value = false }, 2000)
+      } catch {
+        prompt('Copy this link to share your itinerary:', url)
+      }
+    }
+
+    const copyGroupLink = async () => {
+      const url = `${location.origin}${location.pathname}#group/${encodeURIComponent(groupName.value)}`
+      try {
+        await navigator.clipboard.writeText(url)
+        groupLinkCopied.value = true
+        setTimeout(() => { groupLinkCopied.value = false }, 2000)
+      } catch {
+        prompt('Copy this invite link:', url)
+      }
+    }
+
+    const copySharedToMyPicks = async () => {
+      const newIds = sharedPickIds.value.filter(id => !myPicks.value.has(id))
+      const s = new Set(myPicks.value)
+      sharedPickIds.value.forEach(id => s.add(id))
+      myPicks.value = s
+      savePicks()
+      if (groupId.value && userName.value && newIds.length) {
+        const rows = newIds.map(event_id => {
+          const row = { group_id: groupId.value, user_name: userName.value, event_id }
+          if (authUserId.value) row.user_auth_id = authUserId.value
+          return row
+        })
+        await sb.from('picks').upsert(rows, { onConflict: 'group_id,user_name,event_id' })
+      }
+      setView('schedule')
+    }
+
+    const sharedSchedule = computed(() =>
+      events.value.filter(e => sharedPickIds.value.includes(e.id))
+        .sort((a, b) => a.start.localeCompare(b.start))
+    )
+
+    const sharedScheduleDays = computed(() => {
+      const byDay = {}
+      sharedSchedule.value.forEach(e => {
+        const d = e.start.substring(0, 10)
+        ;(byDay[d] = byDay[d] || []).push(e)
+      })
+      return Object.entries(byDay).map(([date, evts]) => ({
+        date, label: DAY_LABELS[date] || date, events: evts,
+      }))
+    })
+
+    const sharedTotalCost = computed(() => {
+      const sum = sharedSchedule.value.reduce((t, e) => t + e.cost, 0)
+      return Number.isInteger(sum) ? sum : sum.toFixed(2)
+    })
+
     // ── ICS Export ────────────────────────────────────────
     const exportICS = () => {
       const lines = [
@@ -541,10 +625,15 @@ createApp({
       events.value  = await (await fetch('./events.json')).json()
       loading.value = false
       if (groupId.value) { await loadGroupPicks(); subscribeToGroup() }
+      window.addEventListener('popstate', parseHash)
+      parseHash()
     })
 
     return {
       loading, events, view, filtersOpen, authUserId,
+      sharedPickIds, shareLinkCopied, groupLinkCopied,
+      setView, copyShareLink, copyGroupLink, copySharedToMyPicks,
+      sharedSchedule, sharedScheduleDays, sharedTotalCost,
       search, filterDay, selectedTypes, maxCost, openOnly, showPicked,
       moreFiltersOpen, selectedAges, selectedExps, maxDuration, selectedVenues, noMaterials, noTournaments,
       days, eventTypes, allAges, allExps, allVenues,

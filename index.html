@@ -24,11 +24,11 @@
         <span class="brand-sub">Schedule Helper</span>
       </div>
       <nav class="header-nav">
-        <button @click="view='browse'" :class="['nav-btn', {active: view==='browse'}]">Browse</button>
-        <button @click="view='schedule'" :class="['nav-btn', {active: view==='schedule'}]">
+        <button @click="setView('browse')" :class="['nav-btn', {active: view==='browse'}]">Browse</button>
+        <button @click="setView('schedule')" :class="['nav-btn', {active: view==='schedule' || view==='shared'}]">
           My Schedule<span v-if="myPicks.size" class="nav-count">{{ myPicks.size }}</span>
         </button>
-        <button @click="view='group'" :class="['nav-btn', {active: view==='group'}]">
+        <button @click="setView('group')" :class="['nav-btn', {active: view==='group'}]">
           Group<span v-if="groupId" class="nav-dot"></span>
         </button>
       </nav>
@@ -223,7 +223,7 @@
       <div v-if="myPicks.size === 0" class="empty-state centered">
         <h2>No events picked yet</h2>
         <p>Browse events and tap + to add them to your schedule.</p>
-        <button @click="view='browse'" class="btn-primary">Browse Events</button>
+        <button @click="setView('browse')" class="btn-primary">Browse Events</button>
       </div>
 
       <template v-else>
@@ -234,6 +234,9 @@
             <span v-if="conflicts.size" class="conflict-pill">⚠ {{ conflicts.size }} conflict{{ conflicts.size > 1 ? 's' : '' }}</span>
           </div>
           <button @click="exportICS" class="btn-secondary">⬇ Export .ics</button>
+          <button @click="copyShareLink" class="btn-secondary share-btn">
+            {{ shareLinkCopied ? '✓ Copied!' : '⎘ Share itinerary' }}
+          </button>
         </div>
 
         <!-- Day sections -->
@@ -359,7 +362,63 @@
           </div>
         </div>
 
-        <p class="group-hint muted-text">Share the group name <strong>"{{ groupName }}"</strong> with friends — picks sync in real time.</p>
+        <div class="group-invite-row">
+          <span class="muted-text">Invite friends to <strong>{{ groupName }}</strong>:</span>
+          <button @click="copyGroupLink" class="btn-secondary share-btn">
+            {{ groupLinkCopied ? '✓ Copied!' : '⎘ Copy invite link' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SHARED VIEW ═══════════════ -->
+    <div v-show="view==='shared'" class="schedule-view">
+      <div class="shared-banner">
+        <div class="shared-banner-info">
+          <span class="shared-banner-title">Shared itinerary</span>
+          <span class="shared-banner-sub">{{ sharedPickIds.length }} events · ${{ sharedTotalCost }}</span>
+        </div>
+        <div class="shared-banner-actions">
+          <button @click="copySharedToMyPicks" class="btn-primary">+ Add all to my schedule</button>
+          <button @click="setView('browse')" class="btn-ghost">Browse events</button>
+        </div>
+      </div>
+
+      <div v-if="!loading && !sharedSchedule.length" class="empty-state centered">
+        <p>No matching events found for this shared link.</p>
+        <button @click="setView('browse')" class="btn-primary">Browse Events</button>
+      </div>
+
+      <div v-for="day in sharedScheduleDays" :key="day.date" class="schedule-day">
+        <h3 class="day-heading">{{ day.label }}</h3>
+        <div
+          v-for="e in day.events"
+          :key="e.id"
+          class="schedule-event"
+          :class="{'is-conflict': conflicts.has(e.id)}"
+          @click="selectedEvent = e"
+        >
+          <div class="sched-time">
+            <span class="sched-start">{{ formatTime(e.start) }}</span>
+            <span class="sched-end">{{ formatTime(e.end) }}</span>
+          </div>
+          <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+          <div class="sched-info">
+            <div class="sched-title-block">
+              <span class="sched-title">{{ e.title }}</span>
+              <span class="sched-loc">{{ e.loc }}{{ e.room ? ' · ' + e.room : '' }}</span>
+            </div>
+          </div>
+          <div class="sched-right">
+            <span class="sched-cost">{{ e.cost === 0 ? 'Free' : '$' + e.cost }}</span>
+            <button
+              class="pick-btn"
+              :class="{picked: myPicks.has(e.id)}"
+              @click.stop="togglePick(e.id)"
+              :title="myPicks.has(e.id) ? 'Remove from schedule' : 'Add to schedule'"
+            >{{ myPicks.has(e.id) ? '✓' : '+' }}</button>
+          </div>
+        </div>
       </div>
     </div>
 
