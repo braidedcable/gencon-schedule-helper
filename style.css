@@ -269,10 +269,10 @@ input { font: inherit; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 10px 12px;
   display: flex; align-items: center; gap: 12px; cursor: pointer;
-  transition: box-shadow .15s; border-left: 3px solid var(--border);
+  transition: box-shadow .15s; border-left: 4px solid transparent;
 }
 .schedule-event:hover { box-shadow: var(--shadow); }
-.schedule-event.is-conflict { border-left-color: var(--danger); background: #fff1f2; }
+.schedule-event.is-conflict { border-left: 5px solid var(--danger); background: #fff1f2; }
 
 .sched-time { display: flex; flex-direction: column; align-items: flex-end; min-width: 58px; font-size: 12px; }
 .sched-start { font-weight: 600; color: var(--text); }
