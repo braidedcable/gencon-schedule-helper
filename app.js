@@ -417,6 +417,9 @@ createApp({
       groupPicks.value = picks
     }
 
+    // Refresh picks every time the user opens the group tab
+    watch(view, v => { if (v === 'group' && groupId.value) loadGroupPicks() })
+
     const subscribeToGroup = () => {
       if (realtimeCh) sb.removeChannel(realtimeCh)
       realtimeCh = sb.channel(`group-${groupId.value}`)
