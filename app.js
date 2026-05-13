@@ -171,6 +171,7 @@ createApp({
           e.title.toLowerCase().includes(q) ||
           e.sys.toLowerCase().includes(q)   ||
           e.gm.toLowerCase().includes(q)    ||
+          e.grp.toLowerCase().includes(q)   ||
           e.desc.toLowerCase().includes(q)
         )
       }
