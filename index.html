@@ -329,7 +329,7 @@
             <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
             <div class="shared-info">
               <span class="shared-title">{{ e.title }}</span>
-              <span class="shared-when">{{ formatDayShort(e.start) }} {{ formatTime(e.start) }}</span>
+              <span class="shared-when">{{ formatDayShort(e.start) }} {{ formatTime(e.start) }} <span class="group-sched-dur">({{ e.dur }}h)</span></span>
             </div>
             <div class="shared-who-list">
               <span v-for="m in sharedBy(e.id)" :key="m" class="member-tag"
@@ -346,7 +346,7 @@
           <div v-for="day in groupSchedule" :key="day.date" class="group-sched-day">
             <h4 class="group-sched-day-label">{{ day.label }}</h4>
             <div v-for="e in day.events" :key="e.id" class="group-sched-event" @click="selectedEvent = e">
-              <div class="group-sched-time">{{ formatTime(e.start) }}</div>
+              <div class="group-sched-time">{{ formatTime(e.start) }} <span class="group-sched-dur">({{ e.dur }}h)</span></div>
               <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
               <div class="group-sched-info">
                 <span class="group-sched-title">{{ e.title }}</span>
