@@ -444,7 +444,11 @@ createApp({
       chatInput.value = ''
       chatSending.value = true
       try {
-        await sb.from('messages').insert({ group_id: groupId.value, user_name: userName.value, body: clean })
+        const { data } = await sb.from('messages')
+          .insert({ group_id: groupId.value, user_name: userName.value, body: clean })
+          .select('id,user_name,body,created_at').single()
+        if (data) { chatMessages.value.push(data); scrollChatToBottom() }
+        if (realtimeCh) realtimeCh.send({ type: 'broadcast', event: 'chat', payload: {} })
       } finally {
         chatSending.value = false
       }
@@ -457,7 +461,7 @@ createApp({
       if (realtimeCh) sb.removeChannel(realtimeCh)
       realtimeCh = sb.channel(`group-${groupId.value}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'picks', filter: `group_id=eq.${groupId.value}` }, () => loadGroupPicks())
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => loadMessages())
+        .on('broadcast', { event: 'chat' }, () => loadMessages())
         .subscribe()
     }
 
