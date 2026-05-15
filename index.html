@@ -185,6 +185,12 @@
               <span class="type-badge" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
               <span class="card-title">{{ e.title }}</span>
               <button
+                class="wish-btn"
+                :class="{active: wishlist.has(e.id)}"
+                @click.stop="toggleWishlist(e.id)"
+                :title="wishlist.has(e.id) ? 'Remove from wishlist' : 'Add to wishlist'"
+              >★</button>
+              <button
                 class="pick-btn"
                 :class="{picked: myPicks.has(e.id)}"
                 @click.stop="togglePick(e.id)"
@@ -227,7 +233,7 @@
         <button @click="openCustomForm()" class="btn-secondary">+ Custom event</button>
       </div>
 
-      <template v-else>
+      <template v-if="mySchedule.length > 0">
         <div class="schedule-toolbar">
           <div class="schedule-stats">
             <span><strong>{{ mySchedule.length }}</strong> events</span>
@@ -270,6 +276,79 @@
           </div>
         </div>
       </template>
+
+      <!-- ── Wishlist / Registration ─────────────────────── -->
+      <div class="wishlist-section">
+        <h3 class="section-heading wishlist-heading">★ Registration Wishlist</h3>
+
+        <div class="reg-countdown">
+          <div v-if="registrationOpen" class="reg-open-banner">
+            Registration is open!
+          </div>
+          <template v-else>
+            <p class="countdown-label-text">Registration opens May 17 at noon ET</p>
+            <div class="countdown-display">
+              <div class="countdown-unit">
+                <span class="countdown-num">{{ countdown.d }}</span>
+                <span class="countdown-sublabel">days</span>
+              </div>
+              <span class="countdown-sep">:</span>
+              <div class="countdown-unit">
+                <span class="countdown-num">{{ countdown.h }}</span>
+                <span class="countdown-sublabel">hrs</span>
+              </div>
+              <span class="countdown-sep">:</span>
+              <div class="countdown-unit">
+                <span class="countdown-num">{{ countdown.m }}</span>
+                <span class="countdown-sublabel">min</span>
+              </div>
+              <span class="countdown-sep">:</span>
+              <div class="countdown-unit">
+                <span class="countdown-num">{{ countdown.s }}</span>
+                <span class="countdown-sublabel">sec</span>
+              </div>
+            </div>
+          </template>
+          <button
+            v-if="wishlist.size > 0"
+            @click="openAllWishlistTabs"
+            class="btn-secondary open-all-btn"
+          >Open all {{ wishlist.size }} event{{ wishlist.size === 1 ? '' : 's' }} on GenCon.com (opens {{ wishlist.size }} tab{{ wishlist.size === 1 ? '' : 's' }})</button>
+        </div>
+
+        <div v-if="wishlist.size === 0" class="wishlist-empty">
+          Star events from Browse or the event detail to save them here for registration.
+        </div>
+
+        <div v-else class="wishlist-events">
+          <div
+            v-for="e in wishlistEvents"
+            :key="e.id"
+            class="wishlist-event"
+            @click="selectedEvent = e"
+          >
+            <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+            <div class="wishlist-info">
+              <span class="wishlist-title">{{ e.title }}</span>
+              <span class="wishlist-meta">{{ formatDayShort(e.start) }} {{ formatTime(e.start) }}–{{ formatTime(e.end) }}<span v-if="e.loc"> · {{ e.loc }}</span></span>
+            </div>
+            <div class="wishlist-actions">
+              <button
+                @click.stop="togglePick(e.id)"
+                :class="['btn-xs', myPicks.has(e.id) ? 'btn-xs-success' : '']"
+                :title="myPicks.has(e.id) ? 'Already in your schedule' : 'Add to schedule'"
+              >{{ myPicks.has(e.id) ? '✓ Scheduled' : '+ Schedule' }}</button>
+              <a
+                :href="`https://www.gencon.com/events/${e.id.match(/\d+$/)[0]}`"
+                target="_blank" rel="noopener"
+                class="btn-xs"
+                @click.stop
+              >View ↗</a>
+              <button @click.stop="toggleWishlist(e.id)" class="wish-btn active" title="Remove from wishlist">★</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══════════════ GROUP VIEW ═══════════════ -->
@@ -568,6 +647,11 @@
 
         <div class="modal-foot">
           <span v-if="conflicts.has(selectedEvent.id)" class="conflict-warn">⚠ Conflicts with another pick</span>
+          <button
+            @click="toggleWishlist(selectedEvent.id)"
+            :class="['wish-btn', 'modal-wish', {active: wishlist.has(selectedEvent.id)}]"
+            :title="wishlist.has(selectedEvent.id) ? 'Remove from wishlist' : 'Add to wishlist'"
+          >{{ wishlist.has(selectedEvent.id) ? '★ Wishlisted' : '☆ Wishlist' }}</button>
           <a :href="`https://www.gencon.com/events/${selectedEvent.id.match(/\d+$/)[0]}`"
             target="_blank" rel="noopener" class="btn-secondary">
             View on GenCon ↗

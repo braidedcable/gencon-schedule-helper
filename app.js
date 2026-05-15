@@ -242,6 +242,49 @@ createApp({
     const customEvents   = ref(JSON.parse(localStorage.getItem('customEvents') || '[]'))
     const saveCustomEvents = () => localStorage.setItem('customEvents', JSON.stringify(customEvents.value))
 
+    // ── Wishlist ──────────────────────────────────────────
+    const wishlist = ref(new Set(JSON.parse(localStorage.getItem('wishlist') || '[]')))
+    const saveWishlist = () => localStorage.setItem('wishlist', JSON.stringify([...wishlist.value]))
+
+    const toggleWishlist = id => {
+      const s = new Set(wishlist.value)
+      s.has(id) ? s.delete(id) : s.add(id)
+      wishlist.value = s
+      saveWishlist()
+    }
+
+    const wishlistEvents = computed(() =>
+      events.value.filter(e => wishlist.value.has(e.id))
+        .sort((a, b) => a.start.localeCompare(b.start))
+    )
+
+    const REG_OPEN_MS = new Date('2026-05-17T16:00:00Z').getTime()
+    const now = ref(Date.now())
+    setInterval(() => { now.value = Date.now() }, 1000)
+
+    const registrationOpen = computed(() => now.value >= REG_OPEN_MS)
+
+    const countdown = computed(() => {
+      const ms = Math.max(0, REG_OPEN_MS - now.value)
+      const s  = Math.floor(ms / 1000)
+      return {
+        d: String(Math.floor(s / 86400)).padStart(2, '0'),
+        h: String(Math.floor((s % 86400) / 3600)).padStart(2, '0'),
+        m: String(Math.floor((s % 3600) / 60)).padStart(2, '0'),
+        s: String(s % 60).padStart(2, '0'),
+      }
+    })
+
+    const openAllWishlistTabs = () => {
+      const ids = [...wishlist.value]
+      if (!ids.length) return
+      if (!confirm(`Open ${ids.length} event${ids.length === 1 ? '' : 's'} on GenCon.com?\nThis will open ${ids.length} new tab${ids.length === 1 ? '' : 's'}.`)) return
+      ids.forEach(id => {
+        const numId = id.match(/\d+$/)?.[0]
+        if (numId) window.open(`https://www.gencon.com/events/${numId}`, '_blank', 'noopener')
+      })
+    }
+
     const showCustomForm  = ref(false)
     const editingCustomId = ref(null)
     const customForm      = ref({ title: '', desc: '', date: '2026-07-30', startTime: '10:00', endTime: '11:00', loc: '' })
@@ -827,6 +870,7 @@ createApp({
       myPicks, togglePick, mySchedule, conflicts, totalCost, scheduleDays,
       customEvents, groupCustomEvents, showCustomForm, editingCustomId, customForm, customFormError,
       openCustomForm, saveCustomEvent, deleteCustomEvent,
+      wishlist, toggleWishlist, wishlistEvents, registrationOpen, countdown, openAllWishlistTabs,
       scheduleDay, timelineEvents, timelineBounds, timelineHours, timelineHeight,
       eventTimelineStyle, formatHour, PX_PER_HOUR,
       userName, groupName, groupId, groupPicks,
