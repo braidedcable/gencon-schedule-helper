@@ -298,6 +298,34 @@ createApp({
       })
     }
 
+    // ── Orphan detection ──────────────────────────────────
+    const orphanedPicks = computed(() => {
+      if (loading.value || !events.value.length) return []
+      const ids = new Set(events.value.map(e => e.id))
+      return [...myPicks.value].filter(id => !ids.has(id))
+    })
+
+    const orphanedWishlist = computed(() => {
+      if (loading.value || !events.value.length) return []
+      const ids = new Set(events.value.map(e => e.id))
+      return [...wishlist.value].filter(id => !ids.has(id))
+    })
+
+    const clearOrphans = () => {
+      if (orphanedPicks.value.length) {
+        const s = new Set(myPicks.value)
+        orphanedPicks.value.forEach(id => s.delete(id))
+        myPicks.value = s
+        savePicks()
+      }
+      if (orphanedWishlist.value.length) {
+        const s = new Set(wishlist.value)
+        orphanedWishlist.value.forEach(id => s.delete(id))
+        wishlist.value = s
+        saveWishlist()
+      }
+    }
+
     const showCustomForm  = ref(false)
     const editingCustomId = ref(null)
     const customForm      = ref({ title: '', desc: '', date: '2026-07-30', startTime: '10:00', endTime: '11:00', loc: '' })
@@ -888,6 +916,7 @@ createApp({
       customEvents, groupCustomEvents, showCustomForm, editingCustomId, customForm, customFormError,
       openCustomForm, saveCustomEvent, deleteCustomEvent,
       wishlist, toggleWishlist, wishlistEvents, registrationOpen, countdown, openAllWishlistTabs,
+      orphanedPicks, orphanedWishlist, clearOrphans,
       dataAge,
       scheduleDay, timelineEvents, timelineBounds, timelineHours, timelineHeight,
       eventTimelineStyle, formatHour, PX_PER_HOUR,

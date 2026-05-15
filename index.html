@@ -227,6 +227,16 @@
 
     <!-- ═══════════════ SCHEDULE VIEW ═══════════════ -->
     <div v-show="view==='schedule'" class="schedule-view">
+
+      <div v-if="orphanedPicks.length || orphanedWishlist.length" class="orphan-banner">
+        <span class="orphan-msg">
+          <template v-if="orphanedPicks.length">{{ orphanedPicks.length }} scheduled event{{ orphanedPicks.length === 1 ? '' : 's' }} no longer exist{{ orphanedPicks.length === 1 ? 's' : '' }} in the current listing.</template>
+          <template v-if="orphanedPicks.length && orphanedWishlist.length"> </template>
+          <template v-if="orphanedWishlist.length">{{ orphanedWishlist.length }} wishlisted event{{ orphanedWishlist.length === 1 ? '' : 's' }} no longer exist{{ orphanedWishlist.length === 1 ? 's' : '' }}.</template>
+        </span>
+        <button @click="clearOrphans" class="btn-xs">Remove {{ orphanedPicks.length + orphanedWishlist.length === 1 ? 'it' : 'them' }}</button>
+      </div>
+
       <div v-if="mySchedule.length === 0" class="empty-state centered">
         <h2>No events scheduled yet</h2>
         <p>Browse events and tap + to add them, or add a custom event.</p>
