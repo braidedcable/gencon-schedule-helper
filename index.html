@@ -26,7 +26,7 @@
       <nav class="header-nav">
         <button @click="setView('browse')" :class="['nav-btn', {active: view==='browse'}]">Browse</button>
         <button @click="setView('schedule')" :class="['nav-btn', {active: view==='schedule' || view==='shared'}]">
-          My Schedule<span v-if="myPicks.size" class="nav-count">{{ myPicks.size }}</span>
+          My Schedule<span v-if="myPicks.size || customEvents.length" class="nav-count">{{ myPicks.size + customEvents.length }}</span>
         </button>
         <button @click="setView('group')" :class="['nav-btn', {active: view==='group'}]">
           Group<span v-if="groupId" class="nav-dot"></span>
@@ -220,19 +220,21 @@
 
     <!-- ═══════════════ SCHEDULE VIEW ═══════════════ -->
     <div v-show="view==='schedule'" class="schedule-view">
-      <div v-if="myPicks.size === 0" class="empty-state centered">
-        <h2>No events picked yet</h2>
-        <p>Browse events and tap + to add them to your schedule.</p>
+      <div v-if="mySchedule.length === 0" class="empty-state centered">
+        <h2>No events scheduled yet</h2>
+        <p>Browse events and tap + to add them, or add a custom event.</p>
         <button @click="setView('browse')" class="btn-primary">Browse Events</button>
+        <button @click="openCustomForm()" class="btn-secondary">+ Custom event</button>
       </div>
 
       <template v-else>
         <div class="schedule-toolbar">
           <div class="schedule-stats">
-            <span><strong>{{ myPicks.size }}</strong> events</span>
+            <span><strong>{{ mySchedule.length }}</strong> events</span>
             <span>Total: <strong>${{ totalCost }}</strong></span>
             <span v-if="conflicts.size" class="conflict-pill">⚠ {{ conflicts.size }} conflict{{ conflicts.size > 1 ? 's' : '' }}</span>
           </div>
+          <button @click="openCustomForm()" class="btn-secondary">+ Custom event</button>
           <button @click="exportICS" class="btn-secondary">⬇ Export .ics</button>
           <button @click="copyShareLink" class="btn-secondary share-btn">
             {{ shareLinkCopied ? '✓ Copied!' : '⎘ Share itinerary' }}
@@ -247,13 +249,14 @@
             :key="e.id"
             class="schedule-event"
             :class="{'is-conflict': conflicts.has(e.id)}"
-            @click="selectedEvent = e"
+            @click="e.custom ? openCustomForm(e) : selectedEvent = e"
           >
             <div class="sched-time">
               <span class="sched-start">{{ formatTime(e.start) }}</span>
               <span class="sched-end">{{ formatTime(e.end) }}</span>
             </div>
-            <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+            <span v-if="e.custom" class="custom-badge">Custom</span>
+            <span v-else class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
             <div class="sched-info">
               <div class="sched-title-block">
                 <span class="sched-title">{{ e.title }}</span>
@@ -261,8 +264,8 @@
               </div>
             </div>
             <div class="sched-right">
-              <span class="sched-cost">{{ e.cost === 0 ? 'Free' : '$' + e.cost }}</span>
-              <button class="remove-btn" @click.stop="togglePick(e.id)" title="Remove">✕</button>
+              <span v-if="!e.custom" class="sched-cost">{{ e.cost === 0 ? 'Free' : '$' + e.cost }}</span>
+              <button class="remove-btn" @click.stop="e.custom ? deleteCustomEvent(e.id) : togglePick(e.id)" :title="e.custom ? 'Delete' : 'Remove'">✕</button>
             </div>
           </div>
         </div>
@@ -450,6 +453,55 @@
               :title="myPicks.has(e.id) ? 'Remove from schedule' : 'Add to schedule'"
             >{{ myPicks.has(e.id) ? '✓' : '+' }}</button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ CUSTOM EVENT FORM ════════════════ -->
+    <div v-if="showCustomForm" class="modal-backdrop" @click.self="showCustomForm = false">
+      <div class="modal" role="dialog">
+        <button class="modal-close" @click="showCustomForm = false" aria-label="Close">✕</button>
+        <div class="modal-head">
+          <h2 class="modal-title">{{ editingCustomId ? 'Edit custom event' : 'Add custom event' }}</h2>
+        </div>
+        <div class="modal-body">
+          <div class="custom-form">
+            <div class="form-field">
+              <label class="form-label">Title <span class="required">*</span></label>
+              <input v-model="customForm.title" type="text" class="text-input" placeholder="What are you doing?" maxlength="200">
+              <p v-if="customFormError.title" class="error-msg">{{ customFormError.title }}</p>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Date <span class="required">*</span></label>
+              <input v-model="customForm.date" type="date" class="text-input">
+              <p v-if="customFormError.date" class="error-msg">{{ customFormError.date }}</p>
+            </div>
+            <div class="time-row">
+              <div class="form-field">
+                <label class="form-label">Start <span class="required">*</span></label>
+                <input v-model="customForm.startTime" type="time" class="text-input">
+                <p v-if="customFormError.startTime" class="error-msg">{{ customFormError.startTime }}</p>
+              </div>
+              <div class="form-field">
+                <label class="form-label">End <span class="required">*</span></label>
+                <input v-model="customForm.endTime" type="time" class="text-input">
+                <p v-if="customFormError.endTime" class="error-msg">{{ customFormError.endTime }}</p>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Location</label>
+              <input v-model="customForm.loc" type="text" class="text-input" placeholder="e.g. ICC Hall A, Room 120" maxlength="200">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Notes</label>
+              <textarea v-model="customForm.desc" class="text-input custom-textarea" placeholder="Optional notes…" maxlength="1000"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button v-if="editingCustomId" @click="deleteCustomEvent(editingCustomId); showCustomForm = false" class="btn-danger">Delete</button>
+          <button @click="showCustomForm = false" class="btn-ghost">Cancel</button>
+          <button @click="saveCustomEvent" class="btn-primary">{{ editingCustomId ? 'Save changes' : 'Add to schedule' }}</button>
         </div>
       </div>
     </div>

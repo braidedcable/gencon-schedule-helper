@@ -239,6 +239,96 @@ createApp({
     const myPicks = ref(new Set(JSON.parse(localStorage.getItem('myPicks') || '[]')))
     const savePicks = () => localStorage.setItem('myPicks', JSON.stringify([...myPicks.value]))
 
+    const customEvents   = ref(JSON.parse(localStorage.getItem('customEvents') || '[]'))
+    const saveCustomEvents = () => localStorage.setItem('customEvents', JSON.stringify(customEvents.value))
+
+    const showCustomForm  = ref(false)
+    const editingCustomId = ref(null)
+    const customForm      = ref({ title: '', desc: '', date: '2026-07-30', startTime: '10:00', endTime: '11:00', loc: '' })
+    const customFormError = ref({})
+
+    const openCustomForm = (event = null) => {
+      if (event) {
+        editingCustomId.value = event.id
+        customForm.value = {
+          title:     event.title,
+          desc:      event.desc  || '',
+          date:      event.start.substring(0, 10),
+          startTime: event.start.substring(11, 16),
+          endTime:   event.end.substring(11, 16),
+          loc:       event.loc   || '',
+        }
+      } else {
+        editingCustomId.value = null
+        customForm.value = { title: '', desc: '', date: '2026-07-30', startTime: '10:00', endTime: '11:00', loc: '' }
+      }
+      customFormError.value = {}
+      showCustomForm.value  = true
+    }
+
+    const saveCustomEvent = async () => {
+      const errs = {}
+      const f = customForm.value
+      if (!f.title.trim())           errs.title     = 'Title is required'
+      else if (f.title.length > 200) errs.title     = 'Title must be under 200 characters'
+      if (!f.date)                   errs.date      = 'Date is required'
+      if (!f.startTime)              errs.startTime = 'Start time is required'
+      if (!f.endTime)                errs.endTime   = 'End time is required'
+      else if (f.endTime <= f.startTime) errs.endTime = 'End time must be after start time'
+      customFormError.value = errs
+      if (Object.keys(errs).length) return
+
+      const start = `${f.date}T${f.startTime}:00`
+      const end   = `${f.date}T${f.endTime}:00`
+      const [sh, sm] = f.startTime.split(':').map(Number)
+      const [eh, em] = f.endTime.split(':').map(Number)
+      const dur = Math.round(((eh * 60 + em) - (sh * 60 + sm)) / 60 * 10) / 10
+
+      if (editingCustomId.value) {
+        customEvents.value = customEvents.value.map(e =>
+          e.id === editingCustomId.value
+            ? { ...e, title: f.title.trim(), desc: f.desc.trim(), start, end, dur, loc: f.loc.trim() }
+            : e
+        )
+        if (groupId.value && userName.value) {
+          await sb.from('custom_events')
+            .update({ title: f.title.trim(), description: f.desc.trim(), start_time: start, end_time: end, location: f.loc.trim() })
+            .eq('id', editingCustomId.value).eq('group_id', groupId.value)
+        }
+      } else {
+        const newId = `custom-${Date.now()}`
+        customEvents.value = [...customEvents.value, {
+          id: newId, title: f.title.trim(), desc: f.desc.trim(),
+          start, end, dur, loc: f.loc.trim(), room: '',
+          cost: 0, type: 'ZED', tix: 1, minP: 1, maxP: 1,
+          gm: '', grp: '', sys: '', age: '', exp: '', mat: false, tour: false, tbl: '', custom: true,
+        }]
+        if (groupId.value && userName.value) {
+          await sb.from('custom_events').insert({
+            id: newId, group_id: groupId.value, user_name: userName.value,
+            title: f.title.trim(), description: f.desc.trim(),
+            start_time: start, end_time: end, location: f.loc.trim(),
+          })
+          const pickRow = { group_id: groupId.value, user_name: userName.value, event_id: newId }
+          if (authUserId.value) pickRow.user_auth_id = authUserId.value
+          await sb.from('picks').insert(pickRow)
+        }
+      }
+      saveCustomEvents()
+      showCustomForm.value = false
+    }
+
+    const deleteCustomEvent = async id => {
+      customEvents.value = customEvents.value.filter(e => e.id !== id)
+      saveCustomEvents()
+      if (selectedEvent.value?.id === id) selectedEvent.value = null
+      if (groupId.value && userName.value) {
+        await sb.from('custom_events').delete().eq('id', id).eq('group_id', groupId.value)
+        await sb.from('picks').delete()
+          .eq('group_id', groupId.value).eq('user_name', userName.value).eq('event_id', id)
+      }
+    }
+
     const togglePick = async id => {
       const s = new Set(myPicks.value)
       const adding = !s.has(id)
@@ -259,7 +349,8 @@ createApp({
 
     // ── Schedule ──────────────────────────────────────────
     const mySchedule = computed(() =>
-      events.value.filter(e => myPicks.value.has(e.id)).sort((a, b) => a.start.localeCompare(b.start))
+      [...events.value.filter(e => myPicks.value.has(e.id)), ...customEvents.value]
+        .sort((a, b) => a.start.localeCompare(b.start))
     )
 
     const conflicts = computed(() => {
@@ -354,10 +445,11 @@ createApp({
     }
 
     // ── Group ─────────────────────────────────────────────
-    const userName       = ref(localStorage.getItem('userName')  || '')
-    const groupName      = ref(localStorage.getItem('groupName') || '')
-    const groupId        = ref(localStorage.getItem('groupId')   || '')
-    const groupPicks     = ref({})
+    const userName           = ref(localStorage.getItem('userName')  || '')
+    const groupName          = ref(localStorage.getItem('groupName') || '')
+    const groupId            = ref(localStorage.getItem('groupId')   || '')
+    const groupPicks         = ref({})
+    const groupCustomEvents  = ref([])
     const inputUserName  = ref('')
     const inputGroupName = ref('')
     const groupLoading   = ref(false)
@@ -397,7 +489,24 @@ createApp({
         })
         if (existing_picks.length)
           await sb.from('picks').upsert(existing_picks, { onConflict: 'group_id,user_name,event_id' })
+        if (customEvents.value.length) {
+          await sb.from('custom_events').upsert(
+            customEvents.value.map(e => ({
+              id: e.id, group_id: gid, user_name: uname,
+              title: e.title, description: e.desc || '',
+              start_time: e.start, end_time: e.end, location: e.loc || '',
+            })),
+            { onConflict: 'id,group_id' }
+          )
+          const customPickRows = customEvents.value.map(e => {
+            const row = { group_id: gid, user_name: uname, event_id: e.id }
+            if (authUserId.value) row.user_auth_id = authUserId.value
+            return row
+          })
+          await sb.from('picks').upsert(customPickRows, { onConflict: 'group_id,user_name,event_id' })
+        }
         await loadGroupPicks()
+        await loadGroupCustomEvents()
         await loadMessages()
         subscribeToGroup()
       } catch (err) {
@@ -410,7 +519,8 @@ createApp({
 
     const leaveGroup = () => {
       if (realtimeCh) sb.removeChannel(realtimeCh)
-      groupId.value = ''; groupName.value = ''; userName.value = ''; groupPicks.value = {}; chatMessages.value = []
+      groupId.value = ''; groupName.value = ''; userName.value = ''
+      groupPicks.value = {}; groupCustomEvents.value = []; chatMessages.value = []
       localStorage.removeItem('groupId'); localStorage.removeItem('groupName'); localStorage.removeItem('userName')
     }
 
@@ -421,6 +531,23 @@ createApp({
       const picks = {}
       data.forEach(({ user_name, event_id }) => { (picks[user_name] = picks[user_name] || []).push(event_id) })
       groupPicks.value = picks
+    }
+
+    const loadGroupCustomEvents = async () => {
+      if (!groupId.value) return
+      const { data } = await sb.from('custom_events').select('*').eq('group_id', groupId.value)
+      if (!data) return
+      groupCustomEvents.value = data.map(r => {
+        const [sh, sm] = r.start_time.substring(11, 16).split(':').map(Number)
+        const [eh, em] = r.end_time.substring(11, 16).split(':').map(Number)
+        return {
+          id: r.id, title: r.title, desc: r.description,
+          start: r.start_time, end: r.end_time,
+          dur: Math.round(((eh * 60 + em) - (sh * 60 + sm)) / 60 * 10) / 10,
+          loc: r.location, room: '', cost: 0, type: 'ZED', tix: 1, minP: 1, maxP: 1,
+          gm: '', grp: '', sys: '', age: '', exp: '', mat: false, tour: false, tbl: '', custom: true,
+        }
+      })
     }
 
     const scrollChatToBottom = () => nextTick(() => {
@@ -455,12 +582,13 @@ createApp({
     }
 
     // Refresh picks every time the user opens the group tab
-    watch(view, v => { if (v === 'group' && groupId.value) { loadGroupPicks(); loadMessages() } })
+    watch(view, v => { if (v === 'group' && groupId.value) { loadGroupPicks(); loadGroupCustomEvents(); loadMessages() } })
 
     const subscribeToGroup = () => {
       if (realtimeCh) sb.removeChannel(realtimeCh)
       realtimeCh = sb.channel(`group-${groupId.value}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'picks', filter: `group_id=eq.${groupId.value}` }, () => loadGroupPicks())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_events', filter: `group_id=eq.${groupId.value}` }, () => loadGroupCustomEvents())
         .on('broadcast', { event: 'chat' }, () => loadMessages())
         .subscribe()
     }
@@ -475,12 +603,14 @@ createApp({
     const groupWantsCount = id => Object.entries(groupPicks.value).filter(([u, picks]) => u !== userName.value && picks.includes(id)).length || null
     const sharedBy       = id => Object.entries(groupPicks.value).filter(([, picks]) => picks.includes(id)).map(([u]) => u)
 
+    const groupEventPool = computed(() => [...events.value, ...groupCustomEvents.value])
+
     const sharedEvents = computed(() => {
       const allIds = Object.values(groupPicks.value).flat()
       const counts = {}
       allIds.forEach(id => { counts[id] = (counts[id] || 0) + 1 })
       const multi = new Set(Object.entries(counts).filter(([, c]) => c >= 2).map(([id]) => id))
-      return events.value.filter(e => multi.has(e.id)).sort((a, b) => a.start.localeCompare(b.start))
+      return groupEventPool.value.filter(e => multi.has(e.id)).sort((a, b) => a.start.localeCompare(b.start))
     })
 
     const memberCost = member =>
@@ -514,7 +644,7 @@ createApp({
 
     const groupSchedule = computed(() => {
       const allEventIds = new Set(Object.values(groupPicks.value).flat())
-      const allEvents = events.value.filter(e => allEventIds.has(e.id))
+      const allEvents = groupEventPool.value.filter(e => allEventIds.has(e.id))
         .sort((a, b) => a.start.localeCompare(b.start))
       const byDay = {}
       allEvents.forEach(e => {
@@ -530,7 +660,9 @@ createApp({
 
     // ── Modal ─────────────────────────────────────────────
     const selectedEvent = ref(null)
-    onMounted(() => window.addEventListener('keydown', e => { if (e.key === 'Escape') selectedEvent.value = null }))
+    onMounted(() => window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { selectedEvent.value = null; showCustomForm.value = false }
+    }))
 
     // ── Formatting ────────────────────────────────────────
     const typeCode  = type => TYPE_LABELS[type.substring(0, 3)] || type.substring(0, 3)
@@ -674,7 +806,7 @@ createApp({
 
       events.value  = await (await fetch('./events.json')).json()
       loading.value = false
-      if (groupId.value) { await loadGroupPicks(); await loadMessages(); subscribeToGroup() }
+      if (groupId.value) { await loadGroupPicks(); await loadGroupCustomEvents(); await loadMessages(); subscribeToGroup() }
       window.addEventListener('popstate', parseHash)
       parseHash()
     })
@@ -689,6 +821,8 @@ createApp({
       days, eventTypes, allAges, allExps, allVenues,
       filteredEvents, displayedEvents, hasMore, activeFilterCount, moreFilterCount,
       myPicks, togglePick, mySchedule, conflicts, totalCost, scheduleDays,
+      customEvents, groupCustomEvents, showCustomForm, editingCustomId, customForm, customFormError,
+      openCustomForm, saveCustomEvent, deleteCustomEvent,
       scheduleDay, timelineEvents, timelineBounds, timelineHours, timelineHeight,
       eventTimelineStyle, formatHour, PX_PER_HOUR,
       userName, groupName, groupId, groupPicks,

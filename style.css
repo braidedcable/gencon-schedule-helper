@@ -556,6 +556,21 @@ input { font: inherit; }
 .group-sched-loc { font-size: 11px; color: var(--muted); }
 .group-sched-members { display: flex; flex-wrap: wrap; gap: 3px; }
 
+/* ── Custom event form ─────────────────────────────────── */
+.custom-form { display: flex; flex-direction: column; gap: 14px; }
+.form-field { display: flex; flex-direction: column; gap: 4px; }
+.form-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.required { color: var(--danger); }
+.time-row { display: flex; gap: 12px; }
+.time-row .form-field { flex: 1; }
+.custom-form .text-input { width: 100%; }
+.custom-textarea { resize: vertical; min-height: 72px; }
+.custom-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;
+  background: #e2e8f0; color: #64748b; white-space: nowrap; flex-shrink: 0;
+}
+
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width: 700px) {
   .header-nav { display: none; }
