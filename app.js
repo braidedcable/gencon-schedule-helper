@@ -313,7 +313,7 @@ createApp({
           const pickRow = { group_id: groupId.value, user_name: userName.value, event_id: newId }
           if (authUserId.value) pickRow.user_auth_id = authUserId.value
           await sb.from('picks').insert(pickRow)
-          await loadGroupCustomEvents()
+          await Promise.all([loadGroupPicks(), loadGroupCustomEvents()])
         }
       }
       saveCustomEvents()
@@ -328,7 +328,7 @@ createApp({
         await sb.from('custom_events').delete().eq('id', id).eq('group_id', groupId.value)
         await sb.from('picks').delete()
           .eq('group_id', groupId.value).eq('user_name', userName.value).eq('event_id', id)
-        await loadGroupCustomEvents()
+        await Promise.all([loadGroupPicks(), loadGroupCustomEvents()])
       }
     }
 
