@@ -457,10 +457,7 @@ createApp({
       if (realtimeCh) sb.removeChannel(realtimeCh)
       realtimeCh = sb.channel(`group-${groupId.value}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'picks', filter: `group_id=eq.${groupId.value}` }, () => loadGroupPicks())
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId.value}` }, ({ new: msg }) => {
-          chatMessages.value.push(msg)
-          scrollChatToBottom()
-        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId.value}` }, () => loadMessages())
         .subscribe()
     }
 
