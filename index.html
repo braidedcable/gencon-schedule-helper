@@ -319,46 +319,56 @@
 
         <!-- Shared interests -->
         <div v-if="sharedEvents.length" class="shared-section">
-          <h3 class="section-heading">⭐ Shared Interests</h3>
-          <div
-            v-for="e in sharedEvents"
-            :key="e.id"
-            class="shared-event"
-            @click="selectedEvent = e"
-          >
-            <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
-            <div class="shared-info">
-              <span class="shared-title">{{ e.title }}</span>
-              <span class="shared-when">{{ formatDayShort(e.start) }} {{ formatTime(e.start) }} <span class="group-sched-dur">({{ e.dur }}h)</span></span>
+          <h3 class="section-heading collapsible-heading" @click="toggleShared">
+            ⭐ Shared Interests
+            <span class="collapse-chevron" :class="{open: sharedOpen}">›</span>
+          </h3>
+          <template v-if="sharedOpen">
+            <div
+              v-for="e in sharedEvents"
+              :key="e.id"
+              class="shared-event"
+              @click="selectedEvent = e"
+            >
+              <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+              <div class="shared-info">
+                <span class="shared-title">{{ e.title }}</span>
+                <span class="shared-when">{{ formatDayShort(e.start) }} {{ formatTime(e.start) }} <span class="group-sched-dur">({{ e.dur }}h)</span></span>
+              </div>
+              <div class="shared-who-list">
+                <span v-for="m in sharedBy(e.id)" :key="m" class="member-tag"
+                  :style="{background: memberColors[m] + '22', color: memberColors[m], borderColor: memberColors[m] + '55'}">
+                  {{ m }}
+                </span>
+              </div>
             </div>
-            <div class="shared-who-list">
-              <span v-for="m in sharedBy(e.id)" :key="m" class="member-tag"
-                :style="{background: memberColors[m] + '22', color: memberColors[m], borderColor: memberColors[m] + '55'}">
-                {{ m }}
-              </span>
-            </div>
-          </div>
+          </template>
         </div>
 
         <!-- Group schedule: all picks by day/time -->
         <div v-if="groupSchedule.length" class="group-sched-section">
           <h3 class="section-heading">Group Schedule</h3>
           <div v-for="day in groupSchedule" :key="day.date" class="group-sched-day">
-            <h4 class="group-sched-day-label">{{ day.label }}</h4>
-            <div v-for="e in day.events" :key="e.id" class="group-sched-event" @click="selectedEvent = e">
-              <div class="group-sched-time">{{ formatTime(e.start) }} <span class="group-sched-dur">({{ e.dur }}h)</span></div>
-              <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
-              <div class="group-sched-info">
-                <span class="group-sched-title">{{ e.title }}</span>
-                <span class="group-sched-loc">{{ e.loc }}</span>
+            <h4 class="group-sched-day-label collapsible-heading" @click="toggleSchedDay(day.date)">
+              {{ day.label }}
+              <span class="collapse-chevron" :class="{open: schedDayOpen(day.date)}">›</span>
+            </h4>
+            <template v-if="schedDayOpen(day.date)">
+              <div v-for="e in day.events" :key="e.id" class="group-sched-event" @click="selectedEvent = e">
+                <div class="group-sched-time">{{ formatTime(e.start) }} <span class="group-sched-dur">({{ e.dur }}h)</span></div>
+                <span class="type-badge sm" :style="{background: typeColor(e.type)}">{{ typeCode(e.type) }}</span>
+                <div class="group-sched-info">
+                  <span class="group-sched-title">{{ e.title }}</span>
+                  <span class="group-sched-loc">{{ e.loc }}</span>
+                </div>
+                <div class="group-sched-members">
+                  <span v-for="m in whoWants(e.id)" :key="m" class="member-tag"
+                    :style="{background: memberColors[m] + '22', color: memberColors[m], borderColor: memberColors[m] + '55'}">
+                    {{ m }}
+                  </span>
+                </div>
               </div>
-              <div class="group-sched-members">
-                <span v-for="m in whoWants(e.id)" :key="m" class="member-tag"
-                  :style="{background: memberColors[m] + '22', color: memberColors[m], borderColor: memberColors[m] + '55'}">
-                  {{ m }}
-                </span>
-              </div>
-            </div>
+            </template>
           </div>
         </div>
 

@@ -333,6 +333,10 @@ input { font: inherit; }
 
 .shared-section { display: flex; flex-direction: column; gap: 10px; }
 .section-heading { font-size: 15px; font-weight: 700; }
+.collapsible-heading { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
+.collapsible-heading:hover { opacity: .8; }
+.collapse-chevron { font-size: 16px; line-height: 1; transition: transform .2s; display: inline-block; transform: rotate(0deg); }
+.collapse-chevron.open { transform: rotate(90deg); }
 .shared-event {
   display: flex; align-items: center; gap: 10px;
   background: var(--surface); border: 1px solid var(--border);

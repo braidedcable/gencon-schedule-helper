@@ -465,6 +465,12 @@ createApp({
         .subscribe()
     }
 
+    const sharedOpen     = ref(true)
+    const schedDaysOpen  = ref({})
+    const toggleShared   = () => { sharedOpen.value = !sharedOpen.value }
+    const toggleSchedDay = date => { schedDaysOpen.value = { ...schedDaysOpen.value, [date]: !(schedDaysOpen.value[date] ?? true) } }
+    const schedDayOpen   = date => schedDaysOpen.value[date] ?? true
+
     const isGroupPick    = id => Object.entries(groupPicks.value).some(([u, picks]) => u !== userName.value && picks.includes(id))
     const groupWantsCount = id => Object.entries(groupPicks.value).filter(([u, picks]) => u !== userName.value && picks.includes(id)).length || null
     const sharedBy       = id => Object.entries(groupPicks.value).filter(([, picks]) => picks.includes(id)).map(([u]) => u)
@@ -688,6 +694,7 @@ createApp({
       userName, groupName, groupId, groupPicks,
       inputUserName, inputGroupName, groupLoading, groupError, sharedEvents,
       memberColors, whoWants, groupSchedule, nameColor,
+      sharedOpen, toggleShared, schedDayOpen, toggleSchedDay,
       chatMessages, chatInput, chatSending, chatLogEl, sendMessage,
       selectedEvent,
       toggleDay, toggleType, toggleAge, toggleExp, toggleVenue, clearFilters,
