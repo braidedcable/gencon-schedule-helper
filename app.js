@@ -294,6 +294,7 @@ createApp({
           await sb.from('custom_events')
             .update({ title: f.title.trim(), description: f.desc.trim(), start_time: start, end_time: end, location: f.loc.trim() })
             .eq('id', editingCustomId.value).eq('group_id', groupId.value)
+          await loadGroupCustomEvents()
         }
       } else {
         const newId = `custom-${Date.now()}`
@@ -312,6 +313,7 @@ createApp({
           const pickRow = { group_id: groupId.value, user_name: userName.value, event_id: newId }
           if (authUserId.value) pickRow.user_auth_id = authUserId.value
           await sb.from('picks').insert(pickRow)
+          await loadGroupCustomEvents()
         }
       }
       saveCustomEvents()
@@ -326,6 +328,7 @@ createApp({
         await sb.from('custom_events').delete().eq('id', id).eq('group_id', groupId.value)
         await sb.from('picks').delete()
           .eq('group_id', groupId.value).eq('user_name', userName.value).eq('event_id', id)
+        await loadGroupCustomEvents()
       }
     }
 
