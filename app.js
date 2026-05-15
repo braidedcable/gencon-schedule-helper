@@ -867,7 +867,7 @@ createApp({
       events.value  = await (await fetch('./events.json')).json()
       loading.value = false
       try {
-        const meta = await (await fetch('./meta.json')).json()
+        const meta = await (await fetch(`./meta.json?_=${Date.now()}`)).json()
         dataUpdated.value = meta.updated
       } catch (_) {}
       if (groupId.value) { await loadGroupPicks(); await loadGroupCustomEvents(); await loadMessages(); subscribeToGroup() }
