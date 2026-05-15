@@ -572,9 +572,16 @@ input { font: inherit; }
   /* Show nav as bottom bar on mobile */
   .header-nav {
     display: flex; position: fixed; bottom: 0; left: 0; right: 0;
-    background: #1e1b4b; padding: 8px 16px; justify-content: space-around;
+    background: #1e1b4b;
+    padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-around;
     box-shadow: 0 -2px 8px rgba(0,0,0,.2); z-index: 100;
   }
   .nav-btn { flex: 1; text-align: center; padding: 6px 4px; font-size: 12px; }
-  body { padding-bottom: 60px; }
+  body {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    touch-action: manipulation;
+  }
+  /* Prevent iOS auto-zoom on input focus (triggers when font-size < 16px) */
+  input, textarea, select { font-size: max(16px, 1em) !important; }
 }
