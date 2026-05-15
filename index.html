@@ -368,6 +368,29 @@
             {{ groupLinkCopied ? '✓ Copied!' : '⎘ Copy invite link' }}
           </button>
         </div>
+
+        <!-- Group chat -->
+        <div class="chat-pane">
+          <h3 class="section-heading">Group Chat</h3>
+          <div class="chat-log" ref="chatLogEl">
+            <div v-if="chatMessages.length === 0" class="chat-empty muted-text">No messages yet.</div>
+            <div v-for="m in chatMessages" :key="m.id" class="chat-msg">
+              <span class="chat-author" :style="{color: nameColor(m.user_name)}">{{ m.user_name }}</span>
+              <span class="chat-body">{{ m.body }}</span>
+            </div>
+          </div>
+          <div class="chat-input-row">
+            <input
+              class="chat-input"
+              v-model="chatInput"
+              placeholder="Message…"
+              maxlength="500"
+              @keydown.enter.prevent="sendMessage"
+            />
+            <button class="btn-primary chat-send" @click="sendMessage" :disabled="chatSending || !chatInput.trim()">Send</button>
+          </div>
+        </div>
+
       </div>
     </div>
 

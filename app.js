@@ -58,7 +58,7 @@ const normLoc = loc => {
 const { createClient } = supabase
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY)
 
-const { createApp, ref, computed, watch, onMounted } = Vue
+const { createApp, ref, computed, watch, nextTick, onMounted } = Vue
 
 createApp({
   setup() {
@@ -363,6 +363,10 @@ createApp({
     const groupLoading   = ref(false)
     const groupError     = ref('')
     let   realtimeCh     = null
+    const chatMessages   = ref([])
+    const chatInput      = ref('')
+    const chatSending    = ref(false)
+    const chatLogEl      = ref(null)
 
     const joinOrCreateGroup = async () => {
       const uname = inputUserName.value.trim()
@@ -394,6 +398,7 @@ createApp({
         if (existing_picks.length)
           await sb.from('picks').upsert(existing_picks, { onConflict: 'group_id,user_name,event_id' })
         await loadGroupPicks()
+        await loadMessages()
         subscribeToGroup()
       } catch (err) {
         console.error(err)
@@ -405,7 +410,7 @@ createApp({
 
     const leaveGroup = () => {
       if (realtimeCh) sb.removeChannel(realtimeCh)
-      groupId.value = ''; groupName.value = ''; userName.value = ''; groupPicks.value = {}
+      groupId.value = ''; groupName.value = ''; userName.value = ''; groupPicks.value = {}; chatMessages.value = []
       localStorage.removeItem('groupId'); localStorage.removeItem('groupName'); localStorage.removeItem('userName')
     }
 
@@ -418,13 +423,44 @@ createApp({
       groupPicks.value = picks
     }
 
+    const scrollChatToBottom = () => nextTick(() => {
+      if (chatLogEl.value) chatLogEl.value.scrollTop = chatLogEl.value.scrollHeight
+    })
+
+    const loadMessages = async () => {
+      if (!groupId.value) return
+      const { data } = await sb.from('messages')
+        .select('id,user_name,body,created_at')
+        .eq('group_id', groupId.value)
+        .order('created_at', { ascending: true })
+        .limit(200)
+      if (data) { chatMessages.value = data; scrollChatToBottom() }
+    }
+
+    const sendMessage = async () => {
+      // Strip C0/C1 control characters; allow all visible Unicode text
+      const clean = chatInput.value.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim().slice(0, 500)
+      if (!clean || !groupId.value || !userName.value || chatSending.value) return
+      chatInput.value = ''
+      chatSending.value = true
+      try {
+        await sb.from('messages').insert({ group_id: groupId.value, user_name: userName.value, body: clean })
+      } finally {
+        chatSending.value = false
+      }
+    }
+
     // Refresh picks every time the user opens the group tab
-    watch(view, v => { if (v === 'group' && groupId.value) loadGroupPicks() })
+    watch(view, v => { if (v === 'group' && groupId.value) { loadGroupPicks(); loadMessages() } })
 
     const subscribeToGroup = () => {
       if (realtimeCh) sb.removeChannel(realtimeCh)
       realtimeCh = sb.channel(`group-${groupId.value}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'picks', filter: `group_id=eq.${groupId.value}` }, () => loadGroupPicks())
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId.value}` }, ({ new: msg }) => {
+          chatMessages.value.push(msg)
+          scrollChatToBottom()
+        })
         .subscribe()
     }
 
@@ -457,6 +493,12 @@ createApp({
       })
       return colors
     })
+
+    const nameColor = name => {
+      let h = 0
+      for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+      return MEMBER_PALETTE[h % MEMBER_PALETTE.length]
+    }
 
     const whoWants = id =>
       Object.entries(groupPicks.value)
@@ -625,7 +667,7 @@ createApp({
 
       events.value  = await (await fetch('./events.json')).json()
       loading.value = false
-      if (groupId.value) { await loadGroupPicks(); subscribeToGroup() }
+      if (groupId.value) { await loadGroupPicks(); await loadMessages(); subscribeToGroup() }
       window.addEventListener('popstate', parseHash)
       parseHash()
     })
@@ -644,7 +686,8 @@ createApp({
       eventTimelineStyle, formatHour, PX_PER_HOUR,
       userName, groupName, groupId, groupPicks,
       inputUserName, inputGroupName, groupLoading, groupError, sharedEvents,
-      memberColors, whoWants, groupSchedule,
+      memberColors, whoWants, groupSchedule, nameColor,
+      chatMessages, chatInput, chatSending, chatLogEl, sendMessage,
       selectedEvent,
       toggleDay, toggleType, toggleAge, toggleExp, toggleVenue, clearFilters,
       joinOrCreateGroup, leaveGroup, isGroupPick, groupWantsCount, sharedBy, memberCost,
