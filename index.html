@@ -375,7 +375,7 @@
           <div class="chat-log" ref="chatLogEl">
             <div v-if="chatMessages.length === 0" class="chat-empty muted-text">No messages yet.</div>
             <div v-for="m in chatMessages" :key="m.id" class="chat-msg">
-              <span class="chat-author" :style="{color: nameColor(m.user_name)}">{{ m.user_name }}</span>
+              <span class="chat-author" :style="{color: memberColors[m.user_name] || nameColor(m.user_name)}">{{ m.user_name }}</span>
               <span class="chat-body">{{ m.body }}</span>
             </div>
           </div>
