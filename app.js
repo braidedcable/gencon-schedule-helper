@@ -262,6 +262,19 @@ createApp({
     const now = ref(Date.now())
     setInterval(() => { now.value = Date.now() }, 1000)
 
+    const dataUpdated = ref(null)
+
+    const dataAge = computed(() => {
+      if (!dataUpdated.value) return null
+      const ms = now.value - new Date(dataUpdated.value).getTime()
+      const h = Math.floor(ms / 3600000)
+      if (h < 1) return 'just now'
+      if (h === 1) return '1 hour ago'
+      if (h < 24) return `${h} hours ago`
+      const d = Math.floor(h / 24)
+      return d === 1 ? '1 day ago' : `${d} days ago`
+    })
+
     const registrationOpen = computed(() => now.value >= REG_OPEN_MS)
 
     const countdown = computed(() => {
@@ -853,6 +866,10 @@ createApp({
 
       events.value  = await (await fetch('./events.json')).json()
       loading.value = false
+      try {
+        const meta = await (await fetch('./meta.json')).json()
+        dataUpdated.value = meta.updated
+      } catch (_) {}
       if (groupId.value) { await loadGroupPicks(); await loadGroupCustomEvents(); await loadMessages(); subscribeToGroup() }
       window.addEventListener('popstate', parseHash)
       parseHash()
@@ -871,6 +888,7 @@ createApp({
       customEvents, groupCustomEvents, showCustomForm, editingCustomId, customForm, customFormError,
       openCustomForm, saveCustomEvent, deleteCustomEvent,
       wishlist, toggleWishlist, wishlistEvents, registrationOpen, countdown, openAllWishlistTabs,
+      dataAge,
       scheduleDay, timelineEvents, timelineBounds, timelineHours, timelineHeight,
       eventTimelineStyle, formatHour, PX_PER_HOUR,
       userName, groupName, groupId, groupPicks,

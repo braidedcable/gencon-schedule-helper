@@ -158,6 +158,7 @@
           <div class="filter-footer">
             <span class="result-count"><strong>{{ filteredEvents.length.toLocaleString() }}</strong> events</span>
             <button v-if="activeFilterCount" @click="clearFilters" class="clear-btn">Clear all</button>
+            <span v-if="dataAge" class="data-age">Updated {{ dataAge }}</span>
           </div>
         </div>
       </aside>

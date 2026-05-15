@@ -1,5 +1,5 @@
 import openpyxl, json, os
-from datetime import datetime
+from datetime import datetime, timezone
 
 def parse_dt(val):
     if not val:
@@ -51,3 +51,7 @@ print(f'Converted {len(events)} events')
 with open('events.json', 'w') as f:
     json.dump(events, f, separators=(',', ':'))
 print(f'events.json: {os.path.getsize("events.json") / 1024 / 1024:.1f} MB')
+
+with open('meta.json', 'w') as f:
+    json.dump({'updated': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}, f)
+print('meta.json written')
