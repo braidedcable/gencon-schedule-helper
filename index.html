@@ -310,7 +310,6 @@
               {{ member }}{{ member === userName ? ' (you)' : '' }}
             </span>
             <span class="member-events">{{ picks.length }} events</span>
-            <span class="member-cost">${{ memberCost(member) }}</span>
           </div>
           <div v-if="Object.keys(groupPicks).length === 0" class="muted-text">
             No picks yet — invite friends to join "{{ groupName }}"
