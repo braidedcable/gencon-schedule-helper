@@ -278,8 +278,8 @@ createApp({
       customFormError.value = errs
       if (Object.keys(errs).length) return
 
-      const start = `${f.date}T${f.startTime}:00`
-      const end   = `${f.date}T${f.endTime}:00`
+      const start = `${f.date}T${f.startTime}`
+      const end   = `${f.date}T${f.endTime}`
       const [sh, sm] = f.startTime.split(':').map(Number)
       const [eh, em] = f.endTime.split(':').map(Number)
       const dur = Math.round(((eh * 60 + em) - (sh * 60 + sm)) / 60 * 10) / 10
@@ -356,9 +356,10 @@ createApp({
     const conflicts = computed(() => {
       const sched = mySchedule.value
       const ids = new Set()
+      const t = dt => dt.substring(0, 16)
       for (let i = 0; i < sched.length; i++)
         for (let j = i + 1; j < sched.length; j++)
-          if (sched[i].start < sched[j].end && sched[i].end > sched[j].start) {
+          if (t(sched[i].start) < t(sched[j].end) && t(sched[i].end) > t(sched[j].start)) {
             ids.add(sched[i].id); ids.add(sched[j].id)
           }
       return ids
