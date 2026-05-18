@@ -368,7 +368,7 @@
               <span class="wishlist-meta">{{ formatDayShort(e.start) }} {{ formatTime(e.start) }}–{{ formatTime(e.end) }}<span v-if="e.loc"> · {{ e.loc }}</span></span>
               <span v-if="vacancyStatus[e.id]?.lastChecked" :class="['vacancy-pill', vacancyStatus[e.id].soldOut === false ? 'vacant' : 'sold']">
                 <template v-if="vacancyStatus[e.id].soldOut === false">Tickets may be available, book now!</template>
-                <template v-else>Sold out · checking in {{ vacancyNextCheckMins(vacancyStatus[e.id].lastChecked) === 0 ? 'now' : vacancyNextCheckMins(vacancyStatus[e.id].lastChecked) + 'm' }}</template>
+                <template v-else>Sold out · {{ vacancyNextCheckMins(vacancyStatus[e.id].lastChecked) > 0 ? 'checking in ' + vacancyNextCheckMins(vacancyStatus[e.id].lastChecked) + 'm' : 'last checked ' + formatVacancyTime(vacancyStatus[e.id].lastChecked) }}</template>
               </span>
               <span v-else-if="vacancyStatus[e.id]" class="vacancy-pill checking">Watching · checking soon</span>
             </div>
