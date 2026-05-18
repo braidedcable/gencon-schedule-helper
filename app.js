@@ -254,9 +254,9 @@ createApp({
     })()
     const vacancyStatus = ref({})   // event_id → { soldOut: bool|null, lastChecked: string|null }
     const vacancyAlerts = ref([])   // [{ id: timestamp, event }] — fires only on live transitions
-    const notificationsSupported = typeof Notification !== 'undefined'
-      && !(navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad'))
-      || (typeof Notification !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches)
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    const isPWA = navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches
+    const notificationsSupported = typeof Notification !== 'undefined' && (!isIOS || isPWA)
     const notificationPermission = ref(notificationsSupported ? Notification.permission : 'unavailable')
 
     const toggleWishlist = id => {
