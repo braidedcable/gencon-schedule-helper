@@ -45,19 +45,18 @@ def main():
     print(f'Checking {len(event_ids)} event(s)...')
     now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-    updates = []
+    updated = 0
     for event_id in event_ids:
         sold_out = check_event(event_id)
         if sold_out is None:
             continue
-        updates.append({'event_id': event_id, 'sold_out': sold_out, 'last_checked': now_iso})
+        sb.table('vacancy_watches').update({'sold_out': sold_out, 'last_checked': now_iso}).eq('event_id', event_id).execute()
         label = 'SOLD OUT' if sold_out else 'AVAILABLE'
         print(f'  {event_id}: {label}')
+        updated += 1
         time.sleep(0.5)
 
-    if updates:
-        sb.table('vacancy_watches').upsert(updates).execute()
-        print(f'Wrote {len(updates)} update(s).')
+    print(f'Wrote {updated} update(s).')
 
     print('Done.')
 
