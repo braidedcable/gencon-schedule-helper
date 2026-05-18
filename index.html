@@ -334,9 +334,20 @@
             @click="openAllWishlistTabs"
             class="btn-secondary open-all-btn"
           >Open all {{ wishlist.size }} event{{ wishlist.size === 1 ? '' : 's' }} on GenCon.com (opens {{ wishlist.size }} tab{{ wishlist.size === 1 ? '' : 's' }})</button>
-          <div v-if="wishlist.size > 0 && notificationPermission !== 'granted'" class="notif-request">
-            <span class="notif-request-text">Get a browser alert the moment a spot opens:</span>
-            <button @click="requestNotifPermission" class="btn-xs">Enable notifications</button>
+          <div v-if="wishlist.size > 0" class="notif-request">
+            <template v-if="notificationPermission === 'granted'">
+              <span class="notif-status granted">✓ Browser notifications on</span>
+            </template>
+            <template v-else-if="notificationPermission === 'denied'">
+              <span class="notif-status denied">Notifications blocked — enable in browser settings</span>
+            </template>
+            <template v-else-if="notificationPermission === 'unavailable'">
+              <span class="notif-status unavailable">Browser notifications not supported — add to home screen to enable on iOS</span>
+            </template>
+            <template v-else>
+              <span class="notif-request-text">Get a browser alert the moment a spot opens:</span>
+              <button @click="requestNotifPermission" class="btn-xs">Enable notifications</button>
+            </template>
           </div>
         </div>
 

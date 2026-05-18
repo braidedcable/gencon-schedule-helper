@@ -254,7 +254,10 @@ createApp({
     })()
     const vacancyStatus = ref({})   // event_id → { soldOut: bool|null, lastChecked: string|null }
     const vacancyAlerts = ref([])   // [{ id: timestamp, event }] — fires only on live transitions
-    const notificationPermission = ref(typeof Notification !== 'undefined' ? Notification.permission : 'denied')
+    const notificationsSupported = typeof Notification !== 'undefined'
+      && !(navigator.userAgent.includes('iPhone') || navigator.userAgent.includes('iPad'))
+      || (typeof Notification !== 'undefined' && window.matchMedia('(display-mode: standalone)').matches)
+    const notificationPermission = ref(notificationsSupported ? Notification.permission : 'unavailable')
 
     const toggleWishlist = id => {
       const s = new Set(wishlist.value)
@@ -323,7 +326,7 @@ createApp({
     }
 
     const requestNotifPermission = async () => {
-      if (typeof Notification === 'undefined') return
+      if (!notificationsSupported) return
       const result = await Notification.requestPermission()
       notificationPermission.value = result
     }
