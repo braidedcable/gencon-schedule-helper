@@ -647,6 +647,51 @@ input { font: inherit; }
 .btn-xs-success { background: #dcfce7; border-color: #86efac; color: #166534; }
 .btn-xs-success:hover { background: #bbf7d0; }
 
+/* ── Vacancy watcher ─────────────────────────────────── */
+.vacancy-nav-dot {
+  display: inline-block; width: 8px; height: 8px;
+  background: #22c55e; border-radius: 50%;
+  margin-left: 5px; vertical-align: middle;
+  box-shadow: 0 0 4px #22c55e;
+  animation: vacancy-pulse 1.5s ease-in-out infinite;
+}
+@keyframes vacancy-pulse {
+  0%, 100% { opacity: 1; } 50% { opacity: .4; }
+}
+
+.vacancy-alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.vacancy-alert {
+  display: flex; align-items: center; gap: 10px;
+  background: #052e16; border: 1px solid #16a34a;
+  border-radius: 8px; padding: 10px 14px;
+  animation: slide-in .2s ease;
+}
+@keyframes slide-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.vacancy-alert-text { flex: 1; font-size: 14px; color: #bbf7d0; }
+.vacancy-alert-text strong { color: #86efac; }
+.vacancy-alert-dismiss {
+  background: none; border: none; color: #6b7280;
+  cursor: pointer; font-size: 14px; padding: 2px 4px; line-height: 1;
+}
+.vacancy-alert-dismiss:hover { color: #d1d5db; }
+
+.notif-request {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 10px; font-size: 13px; color: #9ca3af; flex-wrap: wrap;
+}
+.notif-request-text { flex: 1; min-width: 140px; }
+
+.vacancy-pill {
+  display: inline-block; font-size: 11px; font-weight: 600;
+  padding: 1px 7px; border-radius: 10px; margin-top: 3px; letter-spacing: .02em;
+}
+.vacancy-pill.vacant  { background: #052e16; color: #4ade80; border: 1px solid #166534; }
+.vacancy-pill.sold    { background: #1c1917; color: #78716c; border: 1px solid #292524; }
+.vacancy-pill.checking { background: #1c1c1c; color: #6b7280; border: 1px solid #374151; }
+
+.btn-xs-register { background: #16a34a; color: #fff; border-color: #15803d; }
+.btn-xs-register:hover { background: #15803d; }
+
 /* ── Responsive ────────────────────────────────────────── */
 @media (max-width: 700px) {
   .header-nav { display: none; }

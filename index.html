@@ -26,7 +26,7 @@
       <nav class="header-nav">
         <button @click="setView('browse')" :class="['nav-btn', {active: view==='browse'}]">Browse</button>
         <button @click="setView('schedule')" :class="['nav-btn', {active: view==='schedule' || view==='shared'}]">
-          My Schedule<span v-if="myPicks.size || customEvents.length" class="nav-count">{{ myPicks.size + customEvents.length }}</span>
+          My Schedule<span v-if="myPicks.size || customEvents.length" class="nav-count">{{ myPicks.size + customEvents.length }}</span><span v-if="vacancyCount > 0" class="vacancy-nav-dot" title="Vacancy detected in wishlist!"></span>
         </button>
         <button @click="setView('group')" :class="['nav-btn', {active: view==='group'}]">
           Group<span v-if="groupId" class="nav-dot"></span>
@@ -292,6 +292,15 @@
       <div class="wishlist-section">
         <h3 class="section-heading wishlist-heading">★ Registration Wishlist</h3>
 
+        <!-- Live vacancy alerts -->
+        <div v-if="vacancyAlerts.length" class="vacancy-alerts">
+          <div v-for="alert in vacancyAlerts" :key="alert.id" class="vacancy-alert">
+            <span class="vacancy-alert-text">Spot opened: <strong>{{ alert.event.title }}</strong></span>
+            <a :href="`https://www.gencon.com/events/${alert.event.id.match(/\d+$/)[0]}`" target="_blank" rel="noopener" class="btn-xs btn-xs-register" @click.stop>Register ↗</a>
+            <button @click="dismissVacancyAlert(alert.id)" class="vacancy-alert-dismiss" aria-label="Dismiss">✕</button>
+          </div>
+        </div>
+
         <div class="reg-countdown">
           <div v-if="registrationOpen" class="reg-open-banner">
             Registration is open!
@@ -325,6 +334,10 @@
             @click="openAllWishlistTabs"
             class="btn-secondary open-all-btn"
           >Open all {{ wishlist.size }} event{{ wishlist.size === 1 ? '' : 's' }} on GenCon.com (opens {{ wishlist.size }} tab{{ wishlist.size === 1 ? '' : 's' }})</button>
+          <div v-if="wishlist.size > 0 && notificationPermission !== 'granted'" class="notif-request">
+            <span class="notif-request-text">Get a browser alert the moment a spot opens:</span>
+            <button @click="requestNotifPermission" class="btn-xs">Enable notifications</button>
+          </div>
         </div>
 
         <div v-if="wishlist.size === 0" class="wishlist-empty">
@@ -342,6 +355,10 @@
             <div class="wishlist-info">
               <span class="wishlist-title">{{ e.title }}</span>
               <span class="wishlist-meta">{{ formatDayShort(e.start) }} {{ formatTime(e.start) }}–{{ formatTime(e.end) }}<span v-if="e.loc"> · {{ e.loc }}</span></span>
+              <span v-if="vacancyStatus[e.id]?.lastChecked" :class="['vacancy-pill', vacancyStatus[e.id].soldOut === false ? 'vacant' : 'sold']">
+                {{ vacancyStatus[e.id].soldOut === false ? '✓ Spot available' : 'Sold out' }} · {{ formatVacancyTime(vacancyStatus[e.id].lastChecked) }}
+              </span>
+              <span v-else-if="vacancyStatus[e.id]" class="vacancy-pill checking">Checking soon…</span>
             </div>
             <div class="wishlist-actions">
               <button

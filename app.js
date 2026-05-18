@@ -246,9 +246,30 @@ createApp({
     const wishlist = ref(new Set(JSON.parse(localStorage.getItem('wishlist') || '[]')))
     const saveWishlist = () => localStorage.setItem('wishlist', JSON.stringify([...wishlist.value]))
 
+    // ── Vacancy watcher ───────────────────────────────────
+    const sessionId = (() => {
+      let id = localStorage.getItem('vacancySessionId')
+      if (!id) { id = crypto.randomUUID(); localStorage.setItem('vacancySessionId', id) }
+      return id
+    })()
+    const vacancyStatus = ref({})   // event_id → { soldOut: bool|null, lastChecked: string|null }
+    const vacancyAlerts = ref([])   // [{ id: timestamp, event }] — fires only on live transitions
+    const notificationPermission = ref(typeof Notification !== 'undefined' ? Notification.permission : 'denied')
+
     const toggleWishlist = id => {
       const s = new Set(wishlist.value)
-      s.has(id) ? s.delete(id) : s.add(id)
+      if (s.has(id)) {
+        s.delete(id)
+        sb.from('vacancy_watches').delete().eq('session_id', sessionId).eq('event_id', id).then(() => {})
+        const next = { ...vacancyStatus.value }
+        delete next[id]
+        vacancyStatus.value = next
+      } else {
+        s.add(id)
+        sb.from('vacancy_watches')
+          .upsert({ event_id: id, session_id: sessionId }, { onConflict: 'event_id,session_id', ignoreDuplicates: true })
+          .then(() => {})
+      }
       wishlist.value = s
       saveWishlist()
     }
@@ -287,6 +308,78 @@ createApp({
         s: String(s % 60).padStart(2, '0'),
       }
     })
+
+    const vacancyCount = computed(() =>
+      [...wishlist.value].filter(id => vacancyStatus.value[id]?.soldOut === false).length
+    )
+
+    const formatVacancyTime = isoString => {
+      if (!isoString) return null
+      const min = Math.floor((now.value - new Date(isoString).getTime()) / 60000)
+      if (min < 1) return 'just now'
+      if (min < 60) return `${min}m ago`
+      const h = Math.floor(min / 60)
+      return h === 1 ? '1h ago' : `${h}h ago`
+    }
+
+    const requestNotifPermission = async () => {
+      if (typeof Notification === 'undefined') return
+      const result = await Notification.requestPermission()
+      notificationPermission.value = result
+    }
+
+    const dismissVacancyAlert = id => {
+      vacancyAlerts.value = vacancyAlerts.value.filter(a => a.id !== id)
+    }
+
+    const loadVacancyStatus = async () => {
+      const { data } = await sb.from('vacancy_watches')
+        .select('event_id,sold_out,last_checked')
+        .eq('session_id', sessionId)
+      if (!data) return
+      const status = {}
+      data.forEach(w => { status[w.event_id] = { soldOut: w.sold_out, lastChecked: w.last_checked } })
+      vacancyStatus.value = status
+    }
+
+    const syncVacancyWatches = async () => {
+      const current = new Set(wishlist.value)
+      if (current.size) {
+        const rows = [...current].map(event_id => ({ event_id, session_id: sessionId }))
+        await sb.from('vacancy_watches').upsert(rows, { onConflict: 'event_id,session_id', ignoreDuplicates: true })
+      }
+      // Remove any DB rows for this session no longer in the wishlist
+      const { data } = await sb.from('vacancy_watches').select('event_id').eq('session_id', sessionId)
+      if (!data) return
+      const stale = data.map(r => r.event_id).filter(id => !current.has(id))
+      if (stale.length) {
+        await sb.from('vacancy_watches').delete().eq('session_id', sessionId).in('event_id', stale)
+      }
+    }
+
+    const subscribeToVacancies = () => {
+      sb.channel('vacancies-' + sessionId)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'vacancy_watches',
+          filter: `session_id=eq.${sessionId}`,
+        }, payload => {
+          const { event_id, sold_out, last_checked } = payload.new
+          const prev = vacancyStatus.value[event_id]
+          if (sold_out === false && prev?.soldOut !== false) {
+            const event = events.value.find(e => e.id === event_id)
+            if (event) {
+              vacancyAlerts.value = [{ id: Date.now(), event }, ...vacancyAlerts.value]
+              if (notificationPermission.value === 'granted') {
+                new Notification('Spot opened at GenCon!', { body: event.title, tag: event_id })
+              }
+            }
+          }
+          vacancyStatus.value = { ...vacancyStatus.value, [event_id]: { soldOut: sold_out, lastChecked: last_checked } }
+        })
+        .subscribe()
+    }
 
     const openAllWishlistTabs = () => {
       const ids = [...wishlist.value]
@@ -899,6 +992,7 @@ createApp({
         dataUpdated.value = meta.updated
       } catch (_) {}
       if (groupId.value) { await loadGroupPicks(); await loadGroupCustomEvents(); await loadMessages(); subscribeToGroup() }
+      try { await syncVacancyWatches(); await loadVacancyStatus(); subscribeToVacancies() } catch (_) {}
       window.addEventListener('popstate', parseHash)
       parseHash()
     })
@@ -916,6 +1010,8 @@ createApp({
       customEvents, groupCustomEvents, showCustomForm, editingCustomId, customForm, customFormError,
       openCustomForm, saveCustomEvent, deleteCustomEvent,
       wishlist, toggleWishlist, wishlistEvents, registrationOpen, countdown, openAllWishlistTabs,
+      vacancyStatus, vacancyAlerts, vacancyCount, notificationPermission,
+      formatVacancyTime, requestNotifPermission, dismissVacancyAlert,
       orphanedPicks, orphanedWishlist, clearOrphans,
       dataAge,
       scheduleDay, timelineEvents, timelineBounds, timelineHours, timelineHeight,
