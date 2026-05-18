@@ -7,7 +7,7 @@ import os
 import re
 import time
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from supabase import create_client
 
 sb = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
@@ -34,7 +34,16 @@ def check_event(event_id):
         return None
 
 
+def prune_stale_watches(cutoff_days=30):
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=cutoff_days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    result = sb.table('vacancy_watches').delete().lt('last_seen', cutoff).execute()
+    deleted = len(result.data) if result.data else 0
+    if deleted:
+        print(f'Pruned {deleted} stale watch row(s) (last_seen older than {cutoff_days} days).')
+
+
 def main():
+    prune_stale_watches()
     rows = sb.table('vacancy_watches').select('event_id').execute().data
     event_ids = list({r['event_id'] for r in rows})
 

@@ -354,8 +354,9 @@ createApp({
     const syncVacancyWatches = async () => {
       const current = new Set(wishlist.value)
       if (current.size) {
-        const rows = [...current].map(event_id => ({ event_id, session_id: sessionId }))
-        await sb.from('vacancy_watches').upsert(rows, { onConflict: 'event_id,session_id', ignoreDuplicates: true })
+        const now = new Date().toISOString()
+        const rows = [...current].map(event_id => ({ event_id, session_id: sessionId, last_seen: now }))
+        await sb.from('vacancy_watches').upsert(rows, { onConflict: 'event_id,session_id', ignoreDuplicates: false })
       }
       // Remove any DB rows for this session no longer in the wishlist
       const { data } = await sb.from('vacancy_watches').select('event_id').eq('session_id', sessionId)
