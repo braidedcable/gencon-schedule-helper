@@ -394,9 +394,9 @@ createApp({
       const ids = [...wishlist.value]
       if (!ids.length) return
       if (!confirm(`Open ${ids.length} event${ids.length === 1 ? '' : 's'} on GenCon.com?\nThis will open ${ids.length} new tab${ids.length === 1 ? '' : 's'}.`)) return
-      ids.forEach(id => {
+      ids.forEach((id, i) => {
         const numId = id.match(/\d+$/)?.[0]
-        if (numId) window.open(`https://www.gencon.com/events/${numId}`, '_blank', 'noopener')
+        if (numId) setTimeout(() => window.open(`https://www.gencon.com/events/${numId}`, '_blank', 'noopener'), i * 150)
       })
     }
 
