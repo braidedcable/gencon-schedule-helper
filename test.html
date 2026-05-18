@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vacancy Watch Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: monospace; max-width: 700px; margin: 2rem auto; padding: 0 1rem; background: #111; color: #eee; }
+    h1 { color: #fff; }
+    h2 { color: #aaa; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 2rem; }
+    section { border: 1px solid #333; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+    code { background: #222; padding: 2px 6px; border-radius: 3px; font-size: 0.85rem; word-break: break-all; }
+    button { background: #2a2a2a; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 6px 14px; cursor: pointer; margin: 4px 4px 4px 0; font-family: monospace; }
+    button:hover { background: #3a3a3a; }
+    button.primary { background: #1a4a1a; border-color: #3a8a3a; }
+    button.danger  { background: #4a1a1a; border-color: #8a3a3a; }
+    .status { margin-top: 0.5rem; font-size: 0.85rem; color: #888; }
+    .status.ok  { color: #4a4; }
+    .status.err { color: #a44; }
+    .status.warn { color: #aa4; }
+    #log { background: #0a0a0a; border-radius: 4px; padding: 0.75rem; min-height: 80px; max-height: 300px; overflow-y: auto; font-size: 0.8rem; }
+    .log-entry { margin-bottom: 4px; }
+    .log-entry .ts { color: #555; margin-right: 8px; }
+    .log-entry.event { color: #4af; }
+    .log-entry.info  { color: #aaa; }
+    .log-entry.err   { color: #f44; }
+    label { font-size: 0.85rem; color: #aaa; }
+    input[type=text] { background: #222; border: 1px solid #444; color: #eee; padding: 4px 8px; border-radius: 4px; font-family: monospace; width: 260px; }
+  </style>
+</head>
+<body>
+
+<h1>Vacancy Watch Test</h1>
+<p style="color:#666;font-size:0.85rem">Tests the end-to-end vacancy watch → Realtime → notification pipeline without waiting for a real vacancy.</p>
+
+<!-- Session -->
+<section>
+  <h2>Session</h2>
+  <div>Session ID: <code id="session-id">loading…</code></div>
+  <div class="status" id="session-status"></div>
+</section>
+
+<!-- Test row -->
+<section>
+  <h2>Test Watch Row</h2>
+  <p style="color:#888;font-size:0.85rem;margin-top:0">Inserts a fake event into <code>vacancy_watches</code> for this session so triggers can fire.</p>
+  <div style="margin-bottom:8px">
+    <label>Event ID: <input type="text" id="test-event-id" value="TEST-VACANCY-001"></label>
+  </div>
+  <button class="primary" id="btn-insert">Insert watch row</button>
+  <button class="danger"  id="btn-delete">Remove watch row</button>
+  <div class="status" id="row-status"></div>
+</section>
+
+<!-- Trigger -->
+<section>
+  <h2>Simulate Vacancy Change</h2>
+  <p style="color:#888;font-size:0.85rem;margin-top:0">Updates the row in the DB, which fires a Realtime event to all open tabs watching this session.</p>
+  <button class="primary" id="btn-vacant">Simulate vacancy opening (sold_out → false)</button>
+  <button class="danger"  id="btn-soldout">Simulate sold out (sold_out → true)</button>
+  <div class="status" id="trigger-status"></div>
+</section>
+
+<!-- Notifications -->
+<section>
+  <h2>Push Notifications</h2>
+  <div>Permission: <code id="notif-permission">checking…</code></div>
+  <div style="margin-top:8px">
+    <button id="btn-request-perm">Request permission</button>
+    <button id="btn-test-notif">Send test notification</button>
+  </div>
+  <div class="status" id="notif-status"></div>
+</section>
+
+<!-- Realtime log -->
+<section>
+  <h2>Realtime Log</h2>
+  <div id="log"><div class="log-entry info"><span class="ts">--:--:--</span>Waiting for subscription…</div></div>
+</section>
+
+<script>
+  const SUPABASE_URL = 'https://wzowdavksnwsvhsyjamx.supabase.co'
+  const SUPABASE_KEY = 'sb_publishable_8U2Cy-UyVSdYFi4gRW77ZA_ls3zMX4I'
+  const { createClient } = supabase
+  const sb = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+  // Session ID — reuse the same one the main app uses
+  let sessionId = localStorage.getItem('vacancySessionId')
+  if (!sessionId) { sessionId = crypto.randomUUID(); localStorage.setItem('vacancySessionId', sessionId) }
+  document.getElementById('session-id').textContent = sessionId
+
+  const eventIdInput = () => document.getElementById('test-event-id').value.trim() || 'TEST-VACANCY-001'
+
+  // ── Logging ──────────────────────────────────────────────────────────────
+  function log(msg, type = 'info') {
+    const el = document.getElementById('log')
+    const ts = new Date().toTimeString().slice(0, 8)
+    el.innerHTML += `<div class="log-entry ${type}"><span class="ts">${ts}</span>${msg}</div>`
+    el.scrollTop = el.scrollHeight
+  }
+
+  // ── Realtime subscription ─────────────────────────────────────────────────
+  sb.channel('test-vacancies-' + sessionId)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'vacancy_watches',
+      filter: `session_id=eq.${sessionId}`,
+    }, payload => {
+      const { event_id, sold_out, last_checked } = payload.new || {}
+      const type = sold_out === false ? 'event' : 'info'
+      log(`Realtime ${payload.eventType}: event_id=${event_id} sold_out=${sold_out} last_checked=${last_checked}`, type)
+      document.getElementById('session-status').textContent = 'Realtime event received!'
+      document.getElementById('session-status').className = 'status ok'
+    })
+    .subscribe(status => {
+      log(`Subscription status: ${status}`)
+      document.getElementById('session-status').textContent = `Realtime: ${status}`
+      document.getElementById('session-status').className = status === 'SUBSCRIBED' ? 'status ok' : 'status warn'
+    })
+
+  // ── Insert / delete test row ──────────────────────────────────────────────
+  document.getElementById('btn-insert').addEventListener('click', async () => {
+    const event_id = eventIdInput()
+    const { error } = await sb.from('vacancy_watches')
+      .upsert({ event_id, session_id: sessionId }, { onConflict: 'event_id,session_id' })
+    const el = document.getElementById('row-status')
+    if (error) {
+      el.textContent = `Error: ${error.message}`; el.className = 'status err'
+      log(`Insert error: ${error.message}`, 'err')
+    } else {
+      el.textContent = `Row inserted: (${event_id}, ${sessionId})`; el.className = 'status ok'
+      log(`Inserted watch row for ${event_id}`)
+    }
+  })
+
+  document.getElementById('btn-delete').addEventListener('click', async () => {
+    const event_id = eventIdInput()
+    const { error } = await sb.from('vacancy_watches')
+      .delete().eq('event_id', event_id).eq('session_id', sessionId)
+    const el = document.getElementById('row-status')
+    if (error) {
+      el.textContent = `Error: ${error.message}`; el.className = 'status err'
+      log(`Delete error: ${error.message}`, 'err')
+    } else {
+      el.textContent = `Row removed: (${event_id}, ${sessionId})`; el.className = 'status ok'
+      log(`Deleted watch row for ${event_id}`)
+    }
+  })
+
+  // ── Trigger sold_out change ───────────────────────────────────────────────
+  async function setSoldOut(sold_out) {
+    const event_id = eventIdInput()
+    const last_checked = new Date().toISOString()
+    const { error } = await sb.from('vacancy_watches')
+      .update({ sold_out, last_checked })
+      .eq('event_id', event_id)
+      .eq('session_id', sessionId)
+    const el = document.getElementById('trigger-status')
+    if (error) {
+      el.textContent = `Error: ${error.message}`; el.className = 'status err'
+      log(`Update error: ${error.message}`, 'err')
+    } else {
+      el.textContent = `Set sold_out=${sold_out} on ${event_id}`; el.className = 'status ok'
+      log(`Updated ${event_id}: sold_out=${sold_out}`)
+    }
+  }
+
+  document.getElementById('btn-vacant').addEventListener('click',  () => setSoldOut(false))
+  document.getElementById('btn-soldout').addEventListener('click', () => setSoldOut(true))
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  function updatePermDisplay() {
+    const perm = 'Notification' in window ? Notification.permission : 'unsupported'
+    document.getElementById('notif-permission').textContent = perm
+  }
+  updatePermDisplay()
+
+  document.getElementById('btn-request-perm').addEventListener('click', async () => {
+    if (!('Notification' in window)) {
+      document.getElementById('notif-status').textContent = 'Notifications not supported in this browser.'
+      document.getElementById('notif-status').className = 'status err'
+      return
+    }
+    const result = await Notification.requestPermission()
+    updatePermDisplay()
+    document.getElementById('notif-status').textContent = `Permission result: ${result}`
+    document.getElementById('notif-status').className = result === 'granted' ? 'status ok' : 'status warn'
+    log(`Notification permission: ${result}`)
+  })
+
+  document.getElementById('btn-test-notif').addEventListener('click', () => {
+    if (Notification.permission !== 'granted') {
+      document.getElementById('notif-status').textContent = 'Permission not granted — request it first.'
+      document.getElementById('notif-status').className = 'status err'
+      return
+    }
+    new Notification('Spot opened at GenCon!', {
+      body: 'Test Event: Vacancy Watch Test (TEST-VACANCY-001)',
+      tag: 'test-vacancy',
+    })
+    document.getElementById('notif-status').textContent = 'Test notification sent.'
+    document.getElementById('notif-status').className = 'status ok'
+    log('Sent test notification')
+  })
+</script>
+</body>
+</html>
