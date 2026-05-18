@@ -325,6 +325,12 @@ createApp({
       return h === 1 ? '1h ago' : `${h}h ago`
     }
 
+    // Minutes until the next 20-minute vacancy check fires; ≤0 means overdue/running now
+    const vacancyNextCheckMins = isoString => {
+      if (!isoString) return null
+      return Math.max(0, 20 - Math.floor((now.value - new Date(isoString).getTime()) / 60000))
+    }
+
     const requestNotifPermission = async () => {
       if (!notificationsSupported) return
       const result = await Notification.requestPermission()
@@ -1014,7 +1020,7 @@ createApp({
       openCustomForm, saveCustomEvent, deleteCustomEvent,
       wishlist, toggleWishlist, wishlistEvents, registrationOpen, countdown, openAllWishlistTabs,
       vacancyStatus, vacancyAlerts, vacancyCount, notificationPermission,
-      formatVacancyTime, requestNotifPermission, dismissVacancyAlert,
+      formatVacancyTime, vacancyNextCheckMins, requestNotifPermission, dismissVacancyAlert,
       orphanedPicks, orphanedWishlist, clearOrphans,
       dataAge,
       scheduleDay, timelineEvents, timelineBounds, timelineHours, timelineHeight,
