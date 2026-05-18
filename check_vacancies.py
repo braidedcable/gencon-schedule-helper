@@ -7,26 +7,14 @@ import os
 import re
 import time
 import requests
-import psycopg2
-import psycopg2.extras
 from datetime import datetime, timezone
+from supabase import create_client
 
-DB_PASSWORD = os.environ['DB_PASSWORD']
+sb = create_client(os.environ['SUPABASE_URL'], os.environ['SUPABASE_SERVICE_KEY'])
 
 GENCON_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (compatible; GenConVacancyChecker/1.0)',
 }
-
-
-def get_conn():
-    return psycopg2.connect(
-        host='aws-1-us-west-2.pooler.supabase.com',
-        port=6543,
-        dbname='postgres',
-        user='postgres.wzowdavksnwsvhsyjamx',
-        password=DB_PASSWORD,
-        sslmode='require',
-    )
 
 
 def check_event(event_id):
@@ -47,15 +35,11 @@ def check_event(event_id):
 
 
 def main():
-    conn = get_conn()
-    cur = conn.cursor()
-
-    cur.execute('SELECT DISTINCT event_id FROM vacancy_watches')
-    event_ids = [row[0] for row in cur.fetchall()]
+    rows = sb.table('vacancy_watches').select('event_id').execute().data
+    event_ids = list({r['event_id'] for r in rows})
 
     if not event_ids:
         print('No events being watched.')
-        conn.close()
         return
 
     print(f'Checking {len(event_ids)} event(s)...')
@@ -65,16 +49,14 @@ def main():
         sold_out = check_event(event_id)
         if sold_out is None:
             continue
-        cur.execute(
-            'UPDATE vacancy_watches SET sold_out = %s, last_checked = %s WHERE event_id = %s',
-            (sold_out, now_iso, event_id),
-        )
+        sb.table('vacancy_watches')\
+          .update({'sold_out': sold_out, 'last_checked': now_iso})\
+          .eq('event_id', event_id)\
+          .execute()
         label = 'SOLD OUT' if sold_out else 'AVAILABLE'
         print(f'  {event_id}: {label}')
         time.sleep(0.5)
 
-    conn.commit()
-    conn.close()
     print('Done.')
 
 
