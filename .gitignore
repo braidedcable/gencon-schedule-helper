@@ -3,3 +3,4 @@ events.zip
 __pycache__/
 *.pyc
 supabase/.temp/
+.devcontainer/
