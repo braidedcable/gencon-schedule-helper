@@ -2,3 +2,4 @@ events.xlsx
 events.zip
 __pycache__/
 *.pyc
+supabase/.temp/
