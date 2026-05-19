@@ -17,8 +17,7 @@ The app loads `events.json` (15 MB, ~25k events) at startup. Serving via HTTP is
 To test the Python scripts locally:
 ```bash
 pip install openpyxl requests supabase
-python convert.py          # requires events.xlsx to exist
-python check_vacancies.py  # requires SUPABASE_URL and SUPABASE_SERVICE_KEY env vars
+python convert.py  # requires events.xlsx to exist
 ```
 
 To apply a migration:
@@ -50,12 +49,17 @@ All filtering and search is done client-side in memory. `meta.json` holds the la
 ```
 Browser (wishlist items)
   → vacancy_watches table (Supabase) via JS SDK
-  → GitHub Actions (check-vacancies.yml, every 20min)
-  → check_vacancies.py fetches each gencon.com/events/{numId}
+  → pg_cron (every 20min) → Supabase Edge Function (check-vacancies)
+  → fetches each gencon.com/events/{numId}
   → checks for "This event is SOLD OUT" text
   → upserts sold_out + last_checked back to Supabase
   → Supabase Realtime fires to open browser tabs
   → in-app alert banner + browser push notification
+```
+
+To invoke the Edge Function manually:
+```bash
+curl -X POST https://wzowdavksnwsvhsyjamx.supabase.co/functions/v1/check-vacancies
 ```
 
 Each device gets a stable anonymous `sessionId` (UUID in localStorage). Wishlist changes sync to `vacancy_watches` keyed by `(event_id, session_id)`. On every page load `syncVacancyWatches()` reconciles additions and removals.
@@ -75,7 +79,6 @@ All tables use permissive RLS (public read/write). Every migration must include 
 ### GitHub Actions
 
 - **`update-events.yml`** — runs every 6 hours, downloads GenCon's events.zip, runs `convert.py`, commits `events.json` + `meta.json` if changed. No Supabase interaction.
-- **`check-vacancies.yml`** — runs every 20 minutes, runs `check_vacancies.py` using `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` secrets. Uses `supabase-py` SDK (same API as the JS frontend).
 
 ### Key patterns
 
